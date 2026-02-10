@@ -1,0 +1,40 @@
+{
+  "name": "altcontext-marketing",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build:copy": "tsx build/copy.ts",
+    "build:css": "sass styles/site.scss dist/assets/site.css --style=compressed --no-source-map",
+    "build:postcss": "postcss dist/assets/site.css --use autoprefixer --use cssnano -o dist/assets/site.css",
+    "build:critcss": "tsx build/critcss.ts",
+    "build": "npm run clean && npm run build:copy && npm run build:css && npm run build:postcss && npm run build:critcss",
+    "typecheck": "tsc -p tsconfig.tools.json --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "stylelint": "stylelint \"styles/**/*.{css,scss}\"",
+    "format": "prettier . --check",
+    "format:write": "prettier . --write",
+    "dev:css": "sass --watch styles/site.scss:dist/assets/site.css --style=compressed --no-source-map",
+    "ci": "npm run build && npm run typecheck && npm run lint && npm run stylelint && npm run format"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "@types/node": "^22.0.0",
+    "autoprefixer": "^10.4.0",
+    "cssnano": "^7.0.0",
+    "eslint": "^9.0.0",
+    "eslint-config-prettier": "^9.0.0",
+    "postcss": "^8.4.0",
+    "postcss-cli": "^11.0.0",
+    "prettier": "^3.0.0",
+    "sass": "^1.77.0",
+    "stylelint": "^16.0.0",
+    "stylelint-config-standard-scss": "^14.0.0",
+    "stylelint-scss": "^6.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0",
+    "critical": "^6.0.0"
+  }
+}
