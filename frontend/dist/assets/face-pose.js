@@ -8,35 +8,35 @@
         metadataTitle: "face-metadata-title",
     };
     const POSE_CONFIG = {
-        bucketStep: 2,
+        bucketStep: 1,
         poseCellStep: 1,
-        sameCellExploreChance: 0.18,
-        sameCellMinSwitchIntervalMs: 150,
-        candidatePoolSize: 4,
-        selectionTemperature: 2.8,
+        sameCellExploreChance: 0,
+        sameCellMinSwitchIntervalMs: 220,
+        candidatePoolSize: 1,
+        selectionTemperature: 1,
         recentHistoryLimit: 18,
-        recentPenaltyStep: 1,
+        recentPenaltyStep: 0,
         recentPenaltyWindow: 6,
         rollPenalty: 0.2,
-        usagePenalty: 0.35,
-        maxUsagePenalty: 10,
+        usagePenalty: 0,
+        maxUsagePenalty: 0,
         usagePenaltyDistanceSq: 64,
-        switchMargin: 9,
-        minSwitchIntervalMs: 100,
+        switchMargin: 14,
+        minSwitchIntervalMs: 140,
         fastSwitchMargin: 38,
+        notLoadedSourcePenalty: 0,
         defaultMaxAbsYaw: 75,
         defaultMaxAbsPitch: 50,
         maxAbsYaw: 120,
         maxAbsPitch: 90,
         minPoseSpan: 20,
-        poseBoundsPaddingRatio: 0.04,
+        poseBoundsPaddingRatio: 0,
     };
     const PRELOAD_CONFIG = {
         blockUntilComplete: true,
         maxConcurrent: 12,
         backgroundMaxConcurrent: 8,
-        poseBucketStep: 5,
-        rollBucketStep: 5,
+        stagedBucketSteps: [3, 2, 1],
     };
     const METADATA_ERROR_HINT = "Metadata is missing precomputed face transforms. Run `npm --prefix frontend run build:derivatives`.";
     const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value) && !Number.isNaN(value);
@@ -45,7 +45,29 @@
     const toPoseCellKey = (yaw, pitch, cellStep) => `${Math.round(yaw / cellStep)}:${Math.round(pitch / cellStep)}`;
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const mapUnitToRange = (unit, min, max) => min + clamp(unit, 0, 1) * (max - min);
-    const toImageSource = (file) => new URL(`input-images/${file}`, document.baseURI).toString();
+    const toSingleSource = (item) => new URL(`input-images/${item.file}`, document.baseURI).toString();
+    const toAtlasVariantSource = (atlas, variant) => new URL(`atlases/${atlas.files[variant]}`, document.baseURI).toString();
+    const toVariantSource = (item, variant) => {
+        if (!item.atlas) {
+            return toSingleSource(item);
+        }
+        return toAtlasVariantSource(item.atlas, variant);
+    };
+    /** Choose the sharpest already-loaded atlas variant for smooth progressive upgrades. */
+    const resolveImageSource = (item, loadedSources) => {
+        if (!item.atlas) {
+            return { source: toSingleSource(item), variant: "single" };
+        }
+        const high = toVariantSource(item, "high");
+        if (loadedSources.has(high)) {
+            return { source: high, variant: "high" };
+        }
+        const mid = toVariantSource(item, "mid");
+        if (loadedSources.has(mid)) {
+            return { source: mid, variant: "mid" };
+        }
+        return { source: toVariantSource(item, "low"), variant: "low" };
+    };
     const preloadImage = (source) => new Promise((resolve) => {
         const image = new Image();
         const cleanup = () => {
@@ -74,7 +96,7 @@
      * Preload image sources with a bounded async worker pool.
      * Keeps UI responsive while ensuring images are warm in cache before scrub starts.
      */
-    const preloadImages = async (sources, maxConcurrent, onProgress) => {
+    const preloadImages = async (sources, maxConcurrent, onProgress, onSourceLoaded = () => undefined) => {
         const uniqueSources = Array.from(new Set(sources));
         const total = uniqueSources.length;
         let loaded = 0;
@@ -95,6 +117,7 @@
                 const didLoad = await preloadImage(uniqueSources[nextIndex]);
                 if (didLoad) {
                     loaded += 1;
+                    onSourceLoaded(uniqueSources[nextIndex]);
                 }
                 else {
                     failed += 1;
@@ -107,28 +130,77 @@
     };
     /**
      * Build a staged preload plan:
-     * 1) representative images (blocking) to make first scrub responsive
-     * 2) remaining images (background) to warm the rest of the corpus
+     * 1) seed tier (3°) blocks first interaction
+     * 2) load low-res backfill, then mid-res, then high-res atlas upgrades
      */
     const createPreloadPlan = (metadata) => {
-        const representativeByBucket = new Map();
-        for (const item of metadata) {
-            const yawBucket = Math.round(item.pose.yaw / PRELOAD_CONFIG.poseBucketStep);
-            const pitchBucket = Math.round(item.pose.pitch / PRELOAD_CONFIG.poseBucketStep);
-            const rollBucket = Math.round(item.pose.roll / PRELOAD_CONFIG.rollBucketStep);
-            const key = `${yawBucket}:${pitchBucket}:${rollBucket}`;
-            const previous = representativeByBucket.get(key);
-            if (!previous || item.interocularDist > previous.interocularDist) {
-                representativeByBucket.set(key, item);
-            }
+        const hasTierData = metadata.some((item) => item.preloadTier !== undefined);
+        if (hasTierData) {
+            const toTierVariantSources = (tier, variant) => {
+                const sources = new Set();
+                for (const item of metadata) {
+                    const itemTier = item.preloadTier ?? 0;
+                    const isMatch = tier === 3 ? itemTier >= tier : itemTier === tier;
+                    if (!isMatch) {
+                        continue;
+                    }
+                    sources.add(toVariantSource(item, variant));
+                }
+                return Array.from(sources).sort();
+            };
+            const blockingSources = toTierVariantSources(3, "low");
+            const emittedSources = new Set(blockingSources);
+            const backgroundStages = [];
+            const pushStage = (tier, variant) => {
+                const stage = toTierVariantSources(tier, variant).filter((source) => !emittedSources.has(source));
+                if (stage.length === 0) {
+                    return;
+                }
+                stage.forEach((source) => emittedSources.add(source));
+                backgroundStages.push(stage);
+            };
+            pushStage(2, "low");
+            pushStage(1, "low");
+            pushStage(0, "low");
+            pushStage(3, "mid");
+            pushStage(2, "mid");
+            pushStage(1, "mid");
+            pushStage(0, "mid");
+            pushStage(3, "high");
+            pushStage(2, "high");
+            pushStage(1, "high");
+            pushStage(0, "high");
+            return { blockingSources, backgroundStages };
         }
-        const blockingItems = Array.from(representativeByBucket.values()).sort((left, right) => left.file.localeCompare(right.file));
-        const blockingFiles = new Set(blockingItems.map((item) => item.file));
-        const backgroundItems = metadata.filter((item) => !blockingFiles.has(item.file));
-        return {
-            blockingSources: blockingItems.map((item) => toImageSource(item.file)),
-            backgroundSources: backgroundItems.map((item) => toImageSource(item.file)),
-        };
+        const usedSources = new Set();
+        const stageSources = [];
+        for (const step of PRELOAD_CONFIG.stagedBucketSteps) {
+            const representativeByBucket = new Map();
+            for (const item of metadata) {
+                const key = `${Math.round(item.pose.yaw / step)}:${Math.round(item.pose.pitch / step)}:${Math.round(item.pose.roll / step)}`;
+                const previous = representativeByBucket.get(key);
+                if (!previous || item.interocularDist > previous.interocularDist) {
+                    representativeByBucket.set(key, item);
+                }
+            }
+            const sources = Array.from(new Set(Array.from(representativeByBucket.values()).map((item) => toVariantSource(item, "low"))))
+                .filter((source) => !usedSources.has(source))
+                .sort();
+            if (sources.length === 0) {
+                continue;
+            }
+            sources.forEach((source) => usedSources.add(source));
+            stageSources.push(sources);
+        }
+        if (stageSources.length === 0) {
+            return { blockingSources: [], backgroundStages: [] };
+        }
+        const [blockingSources, ...backgroundStages] = stageSources;
+        const midStage = Array.from(new Set(metadata.map((item) => toVariantSource(item, "mid")))).filter((source) => !usedSources.has(source));
+        midStage.forEach((source) => usedSources.add(source));
+        const highStage = Array.from(new Set(metadata.map((item) => toVariantSource(item, "high")))).filter((source) => !usedSources.has(source));
+        const upgradeStages = [midStage, highStage].filter((stage) => stage.length > 0);
+        return { blockingSources, backgroundStages: [...backgroundStages, ...upgradeStages] };
     };
     /**
      * Derive interactive pose bounds from dataset coverage.
@@ -193,12 +265,75 @@
         poseCellKey: "",
         selectionUsage: new Map(),
         recentFiles: [],
+        loadedSources: new Set(),
     });
     const asRecord = (value) => {
         if (typeof value !== "object" || value === null || Array.isArray(value)) {
             return null;
         }
         return value;
+    };
+    const parseAtlasFiles = (value) => {
+        const files = asRecord(value);
+        if (!files) {
+            return null;
+        }
+        const low = files.low;
+        const mid = files.mid;
+        const high = files.high;
+        if (typeof low !== "string" ||
+            low.trim().length === 0 ||
+            typeof mid !== "string" ||
+            mid.trim().length === 0 ||
+            typeof high !== "string" ||
+            high.trim().length === 0) {
+            return null;
+        }
+        return { low, mid, high };
+    };
+    const parseAtlasPlacement = (value) => {
+        if (value === undefined || value === null) {
+            return null;
+        }
+        const placement = asRecord(value);
+        if (!placement) {
+            return null;
+        }
+        const column = placement.column;
+        const row = placement.row;
+        const gridSize = placement.gridSize;
+        const file = placement.file;
+        const files = parseAtlasFiles(placement.files);
+        const normalizedFiles = files ??
+            (typeof file === "string" && file.trim().length > 0
+                ? {
+                    low: file,
+                    mid: file,
+                    high: file,
+                }
+                : null);
+        if (!normalizedFiles ||
+            !isFiniteNumber(column) ||
+            !isFiniteNumber(row) ||
+            !isFiniteNumber(gridSize)) {
+            return null;
+        }
+        const safeColumn = Math.trunc(column);
+        const safeRow = Math.trunc(row);
+        const safeGridSize = Math.trunc(gridSize);
+        if (safeColumn < 0 ||
+            safeRow < 0 ||
+            safeGridSize < 1 ||
+            safeColumn >= safeGridSize ||
+            safeRow >= safeGridSize) {
+            return null;
+        }
+        return {
+            files: normalizedFiles,
+            column: safeColumn,
+            row: safeRow,
+            gridSize: safeGridSize,
+        };
     };
     const parseMetadataItem = (value) => {
         const item = asRecord(value);
@@ -235,6 +370,15 @@
         const name = typeof rawName === "string" && rawName.trim().length > 0
             ? rawName
             : undefined;
+        const atlas = parseAtlasPlacement(item.atlas);
+        if (item.atlas !== undefined && atlas === null) {
+            return null;
+        }
+        const rawPreloadTier = item.preloadTier;
+        const preloadTier = isFiniteNumber(rawPreloadTier) &&
+            [0, 1, 2, 3].includes(Math.trunc(rawPreloadTier))
+            ? Math.trunc(rawPreloadTier)
+            : undefined;
         return {
             file,
             pose: { yaw, pitch, roll: isFiniteNumber(roll) ? roll : 0 },
@@ -246,6 +390,8 @@
                 rotateRad,
                 scale,
             },
+            atlas: atlas ?? undefined,
+            preloadTier,
         };
     };
     /**
@@ -309,6 +455,12 @@
             }
             image.style.transform = transform;
         };
+        const setImageRendering = (mode) => {
+            if (!(image instanceof HTMLImageElement)) {
+                return;
+            }
+            image.style.imageRendering = mode;
+        };
         const getContainerRect = () => {
             if (!(container instanceof HTMLElement)) {
                 return null;
@@ -337,6 +489,7 @@
             showImage,
             setImageSource,
             setImageTransform,
+            setImageRendering,
             getContainerRect,
             renderMetadata,
         };
@@ -417,6 +570,7 @@
             return weightedRoll / weightTotal;
         };
         const scoreCandidate = (candidate, yaw, pitch, targetRoll, state) => {
+            const source = resolveImageSource(candidate, state.loadedSources).source;
             const yawDistance = candidate.pose.yaw - yaw;
             const pitchDistance = candidate.pose.pitch - pitch;
             const distance = yawDistance * yawDistance + pitchDistance * pitchDistance;
@@ -434,11 +588,14 @@
                 recentPenalty =
                     windowLeft > 0 ? windowLeft * POSE_CONFIG.recentPenaltyStep : 0;
             }
+            const loadPenalty = state.loadedSources.has(source)
+                ? 0
+                : POSE_CONFIG.notLoadedSourcePenalty;
             if (distance > POSE_CONFIG.usagePenaltyDistanceSq) {
-                return distance + rollPenalty + recentPenalty;
+                return distance + rollPenalty + recentPenalty + loadPenalty;
             }
             const usagePenalty = Math.min(usage * POSE_CONFIG.usagePenalty, POSE_CONFIG.maxUsagePenalty);
-            return distance + usagePenalty + rollPenalty + recentPenalty;
+            return distance + usagePenalty + rollPenalty + recentPenalty + loadPenalty;
         };
         const pickFromTopCandidates = (scoredCandidates) => {
             if (scoredCandidates.length === 0) {
@@ -538,8 +695,8 @@
         };
         return { pickClosest };
     };
-    const toTransformCss = (transform) => `translate(${transform.translateXRatio * 100}%, ${transform.translateYRatio * 100}%) ` +
-        `rotate(${transform.rotateRad}rad) scale(${transform.scale})`;
+    const toAtlasTileTransformCss = (atlas) => `translate(${-atlas.column * 100}%, ${-atlas.row * 100}%) scale(${atlas.gridSize})`;
+    const toTransformCss = (item) => item.atlas ? toAtlasTileTransformCss(item.atlas) : "none";
     const waitForImageReady = (image, token, state) => new Promise((resolve, reject) => {
         if (token !== state.token) {
             reject(new Error("stale request"));
@@ -569,20 +726,23 @@
      * Runtime work is limited to source swap + applying precomputed transform.
      */
     const createFaceUpdater = (dom, state, poseIndex) => {
-        const applyItemFrame = (item) => {
-            const transformCss = toTransformCss(item.transform);
+        const applyItemFrame = (item, variant) => {
+            const transformCss = toTransformCss(item);
             dom.setImageTransform(transformCss);
+            dom.setImageRendering(variant === "low" ? "pixelated" : "auto");
             state.lastTransform = transformCss;
             state.hasTransform = true;
             dom.renderMetadata(item);
         };
         const updateFace = async (yaw, pitch) => {
             const item = poseIndex.pickClosest(yaw, pitch, state);
-            const nextSource = toImageSource(item.file);
+            const nextResolved = resolveImageSource(item, state.loadedSources);
+            const nextSource = nextResolved.source;
             if (dom.image &&
                 dom.image.src === nextSource &&
                 dom.image.naturalWidth > 0) {
-                applyItemFrame(item);
+                state.loadedSources.add(nextSource);
+                applyItemFrame(item, nextResolved.variant);
                 return;
             }
             if (state.hasTransform) {
@@ -591,6 +751,7 @@
             const token = state.token + 1;
             state.token = token;
             state.currentItem = item;
+            dom.setImageRendering(nextResolved.variant === "low" ? "pixelated" : "auto");
             dom.setImageSource(nextSource);
             if (!dom.image) {
                 return;
@@ -608,7 +769,9 @@
                 if (token !== state.token) {
                     return;
                 }
-                applyItemFrame(item);
+                state.loadedSources.add(nextSource);
+                const bestResolved = resolveImageSource(item, state.loadedSources);
+                applyItemFrame(item, bestResolved.variant);
             }
             catch {
                 // Keep last good transform on load/decode failure.
@@ -689,6 +852,8 @@
                 }
                 lastProgressValue = progressValue;
                 dom.setLoaderText(`Preloading images... ${progressValue}/${summary.total}`);
+            }, (source) => {
+                state.loadedSources.add(source);
             });
             if (preloadResult.failed > 0) {
                 console.warn(`Image preload completed with ${preloadResult.failed} failed requests.`);
@@ -713,12 +878,25 @@
         }
         const initialPose = pickInitialPose(metadata, poseBounds);
         commandQueue.enqueue(initialPose.yaw, initialPose.pitch);
-        if (preloadPlan.backgroundSources.length > 0) {
-            void preloadImages(preloadPlan.backgroundSources, PRELOAD_CONFIG.backgroundMaxConcurrent, () => undefined).then((summary) => {
-                if (summary.failed > 0) {
-                    console.warn(`Background preload completed with ${summary.failed} failed requests.`);
+        if (preloadPlan.backgroundStages.length > 0) {
+            const runBackgroundPreload = async () => {
+                for (let stageIndex = 0; stageIndex < preloadPlan.backgroundStages.length; stageIndex += 1) {
+                    const stageSources = preloadPlan.backgroundStages[stageIndex];
+                    if (stageSources.length === 0) {
+                        continue;
+                    }
+                    const summary = await preloadImages(stageSources, PRELOAD_CONFIG.backgroundMaxConcurrent, () => undefined, (source) => {
+                        state.loadedSources.add(source);
+                    });
+                    if (summary.failed > 0) {
+                        console.warn(`Background preload stage ${stageIndex + 1} completed with ${summary.failed} failed requests.`);
+                    }
+                    if (state.currentItem) {
+                        void updateFace(state.currentItem.pose.yaw, state.currentItem.pose.pitch);
+                    }
                 }
-            });
+            };
+            void runBackgroundPreload();
         }
     };
     void initializeFacePose();
