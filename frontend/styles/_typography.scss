@@ -10,7 +10,7 @@
 }
 
 @font-face {
-  font-family: "Geist";
+  font-family: tokens.$font-body;
   font-style: normal;
   font-display: swap;
   font-weight: 800;
@@ -73,8 +73,7 @@ h1 {
 
 
 h2 {
-  font-size: 4rem;
-  font-family: tokens.$font-display;
+  font-size: 3rem;
   color: tokens.$color-duotone-shadow-match;
   font-weight: 400;
   margin: 0 0 tokens.$space-sm;
