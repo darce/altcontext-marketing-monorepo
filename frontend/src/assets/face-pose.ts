@@ -34,6 +34,17 @@
     maxPitch: number;
   }
 
+  interface PreloadSummary {
+    total: number;
+    loaded: number;
+    failed: number;
+  }
+
+  interface PreloadPlan {
+    blockingSources: string[];
+    backgroundSources: string[];
+  }
+
   interface RuntimeState {
     phase: RuntimePhase;
     token: number;
@@ -102,6 +113,14 @@
     poseBoundsPaddingRatio: 0.04,
   } as const;
 
+  const PRELOAD_CONFIG = {
+    blockUntilComplete: true,
+    maxConcurrent: 12,
+    backgroundMaxConcurrent: 8,
+    poseBucketStep: 2.5,
+    rollBucketStep: 5,
+  } as const;
+
   const METADATA_ERROR_HINT =
     "Metadata is missing precomputed face transforms. Run `npm --prefix frontend run build:derivatives`.";
 
@@ -125,6 +144,118 @@
 
   const mapUnitToRange = (unit: number, min: number, max: number): number =>
     min + clamp(unit, 0, 1) * (max - min);
+
+  const toImageSource = (file: string): string =>
+    new URL(`input-images/${file}`, document.baseURI).toString();
+
+  const preloadImage = (source: string): Promise<boolean> =>
+    new Promise((resolve) => {
+      const image = new Image();
+
+      const cleanup = (): void => {
+        image.onload = null;
+        image.onerror = null;
+      };
+
+      image.onload = () => {
+        cleanup();
+        if (typeof image.decode === "function") {
+          image.decode().catch(() => undefined).finally(() => resolve(true));
+          return;
+        }
+        resolve(true);
+      };
+
+      image.onerror = () => {
+        cleanup();
+        resolve(false);
+      };
+
+      image.src = source;
+      if (image.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
+        cleanup();
+        resolve(true);
+      }
+    });
+
+  /**
+   * Preload image sources with a bounded async worker pool.
+   * Keeps UI responsive while ensuring images are warm in cache before scrub starts.
+   */
+  const preloadImages = async (
+    sources: string[],
+    maxConcurrent: number,
+    onProgress: (summary: PreloadSummary) => void,
+  ): Promise<PreloadSummary> => {
+    const uniqueSources = Array.from(new Set(sources));
+    const total = uniqueSources.length;
+    let loaded = 0;
+    let failed = 0;
+    let cursor = 0;
+
+    onProgress({ total, loaded, failed });
+
+    if (total === 0) {
+      return { total, loaded, failed };
+    }
+
+    const workerCount = Math.max(1, Math.min(maxConcurrent, total));
+    const worker = async (): Promise<void> => {
+      for (;;) {
+        const nextIndex = cursor;
+        cursor += 1;
+        if (nextIndex >= total) {
+          return;
+        }
+
+        const didLoad = await preloadImage(uniqueSources[nextIndex]);
+        if (didLoad) {
+          loaded += 1;
+        } else {
+          failed += 1;
+        }
+        onProgress({ total, loaded, failed });
+      }
+    };
+
+    await Promise.all(
+      Array.from({ length: workerCount }, () => worker()),
+    );
+
+    return { total, loaded, failed };
+  };
+
+  /**
+   * Build a staged preload plan:
+   * 1) representative images (blocking) to make first scrub responsive
+   * 2) remaining images (background) to warm the rest of the corpus
+   */
+  const createPreloadPlan = (metadata: MetadataItem[]): PreloadPlan => {
+    const representativeByBucket = new Map<string, MetadataItem>();
+
+    for (const item of metadata) {
+      const yawBucket = Math.round(item.pose.yaw / PRELOAD_CONFIG.poseBucketStep);
+      const pitchBucket = Math.round(item.pose.pitch / PRELOAD_CONFIG.poseBucketStep);
+      const rollBucket = Math.round(item.pose.roll / PRELOAD_CONFIG.rollBucketStep);
+      const key = `${yawBucket}:${pitchBucket}:${rollBucket}`;
+
+      const previous = representativeByBucket.get(key);
+      if (!previous || item.interocularDist > previous.interocularDist) {
+        representativeByBucket.set(key, item);
+      }
+    }
+
+    const blockingItems = Array.from(representativeByBucket.values()).sort(
+      (left, right) => left.file.localeCompare(right.file),
+    );
+    const blockingFiles = new Set(blockingItems.map((item) => item.file));
+    const backgroundItems = metadata.filter((item) => !blockingFiles.has(item.file));
+
+    return {
+      blockingSources: blockingItems.map((item) => toImageSource(item.file)),
+      backgroundSources: backgroundItems.map((item) => toImageSource(item.file)),
+    };
+  };
 
   /**
    * Derive interactive pose bounds from dataset coverage.
@@ -724,10 +855,7 @@
 
     const updateFace = async (yaw: number, pitch: number): Promise<void> => {
       const item = poseIndex.pickClosest(yaw, pitch, state);
-      const nextSource = new URL(
-        `input-images/${item.file}`,
-        document.baseURI,
-      ).toString();
+      const nextSource = toImageSource(item.file);
 
       if (
         dom.image &&
@@ -857,6 +985,32 @@
       return;
     }
 
+    const preloadPlan = createPreloadPlan(metadata);
+
+    if (PRELOAD_CONFIG.blockUntilComplete) {
+      let lastProgressValue = -1;
+      const preloadResult = await preloadImages(
+        preloadPlan.blockingSources,
+        PRELOAD_CONFIG.maxConcurrent,
+        (summary) => {
+          const progressValue = summary.loaded + summary.failed;
+          if (progressValue === lastProgressValue) {
+            return;
+          }
+          lastProgressValue = progressValue;
+          dom.setLoaderText(
+            `Preloading images... ${progressValue}/${summary.total}`,
+          );
+        },
+      );
+
+      if (preloadResult.failed > 0) {
+        console.warn(
+          `Image preload completed with ${preloadResult.failed} failed requests.`,
+        );
+      }
+    }
+
     const poseIndex = createPoseIndex(metadata);
     const poseBounds = derivePoseBounds(metadata);
     dom.hideLoader();
@@ -879,6 +1033,20 @@
 
     const initialPose = pickInitialPose(metadata, poseBounds);
     commandQueue.enqueue(initialPose.yaw, initialPose.pitch);
+
+    if (preloadPlan.backgroundSources.length > 0) {
+      void preloadImages(
+        preloadPlan.backgroundSources,
+        PRELOAD_CONFIG.backgroundMaxConcurrent,
+        () => undefined,
+      ).then((summary) => {
+        if (summary.failed > 0) {
+          console.warn(
+            `Background preload completed with ${summary.failed} failed requests.`,
+          );
+        }
+      });
+    }
   };
 
   void initializeFacePose();

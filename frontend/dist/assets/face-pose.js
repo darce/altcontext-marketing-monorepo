@@ -31,6 +31,13 @@
         minPoseSpan: 20,
         poseBoundsPaddingRatio: 0.04,
     };
+    const PRELOAD_CONFIG = {
+        blockUntilComplete: true,
+        maxConcurrent: 12,
+        backgroundMaxConcurrent: 8,
+        poseBucketStep: 2.5,
+        rollBucketStep: 5,
+    };
     const METADATA_ERROR_HINT = "Metadata is missing precomputed face transforms. Run `npm --prefix frontend run build:derivatives`.";
     const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value) && !Number.isNaN(value);
     const nowMs = () => typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -38,6 +45,91 @@
     const toPoseCellKey = (yaw, pitch, cellStep) => `${Math.round(yaw / cellStep)}:${Math.round(pitch / cellStep)}`;
     const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
     const mapUnitToRange = (unit, min, max) => min + clamp(unit, 0, 1) * (max - min);
+    const toImageSource = (file) => new URL(`input-images/${file}`, document.baseURI).toString();
+    const preloadImage = (source) => new Promise((resolve) => {
+        const image = new Image();
+        const cleanup = () => {
+            image.onload = null;
+            image.onerror = null;
+        };
+        image.onload = () => {
+            cleanup();
+            if (typeof image.decode === "function") {
+                image.decode().catch(() => undefined).finally(() => resolve(true));
+                return;
+            }
+            resolve(true);
+        };
+        image.onerror = () => {
+            cleanup();
+            resolve(false);
+        };
+        image.src = source;
+        if (image.complete && image.naturalWidth > 0 && image.naturalHeight > 0) {
+            cleanup();
+            resolve(true);
+        }
+    });
+    /**
+     * Preload image sources with a bounded async worker pool.
+     * Keeps UI responsive while ensuring images are warm in cache before scrub starts.
+     */
+    const preloadImages = async (sources, maxConcurrent, onProgress) => {
+        const uniqueSources = Array.from(new Set(sources));
+        const total = uniqueSources.length;
+        let loaded = 0;
+        let failed = 0;
+        let cursor = 0;
+        onProgress({ total, loaded, failed });
+        if (total === 0) {
+            return { total, loaded, failed };
+        }
+        const workerCount = Math.max(1, Math.min(maxConcurrent, total));
+        const worker = async () => {
+            for (;;) {
+                const nextIndex = cursor;
+                cursor += 1;
+                if (nextIndex >= total) {
+                    return;
+                }
+                const didLoad = await preloadImage(uniqueSources[nextIndex]);
+                if (didLoad) {
+                    loaded += 1;
+                }
+                else {
+                    failed += 1;
+                }
+                onProgress({ total, loaded, failed });
+            }
+        };
+        await Promise.all(Array.from({ length: workerCount }, () => worker()));
+        return { total, loaded, failed };
+    };
+    /**
+     * Build a staged preload plan:
+     * 1) representative images (blocking) to make first scrub responsive
+     * 2) remaining images (background) to warm the rest of the corpus
+     */
+    const createPreloadPlan = (metadata) => {
+        const representativeByBucket = new Map();
+        for (const item of metadata) {
+            const yawBucket = Math.round(item.pose.yaw / PRELOAD_CONFIG.poseBucketStep);
+            const pitchBucket = Math.round(item.pose.pitch / PRELOAD_CONFIG.poseBucketStep);
+            const rollBucket = Math.round(item.pose.roll / PRELOAD_CONFIG.rollBucketStep);
+            const key = `${yawBucket}:${pitchBucket}:${rollBucket}`;
+            const previous = representativeByBucket.get(key);
+            if (!previous || item.interocularDist > previous.interocularDist) {
+                representativeByBucket.set(key, item);
+            }
+        }
+        const blockingItems = Array.from(representativeByBucket.values()).sort((left, right) => left.file.localeCompare(right.file));
+        const blockingFiles = new Set(blockingItems.map((item) => item.file));
+        const backgroundItems = metadata.filter((item) => !blockingFiles.has(item.file));
+        return {
+            blockingSources: blockingItems.map((item) => toImageSource(item.file)),
+            backgroundSources: backgroundItems.map((item) => toImageSource(item.file)),
+        };
+    };
     /**
      * Derive interactive pose bounds from dataset coverage.
      * Falls back to defaults when metadata range is too narrow.
@@ -486,7 +578,7 @@
         };
         const updateFace = async (yaw, pitch) => {
             const item = poseIndex.pickClosest(yaw, pitch, state);
-            const nextSource = new URL(`input-images/${item.file}`, document.baseURI).toString();
+            const nextSource = toImageSource(item.file);
             if (dom.image &&
                 dom.image.src === nextSource &&
                 dom.image.naturalWidth > 0) {
@@ -587,6 +679,21 @@
             state.phase = "error";
             return;
         }
+        const preloadPlan = createPreloadPlan(metadata);
+        if (PRELOAD_CONFIG.blockUntilComplete) {
+            let lastProgressValue = -1;
+            const preloadResult = await preloadImages(preloadPlan.blockingSources, PRELOAD_CONFIG.maxConcurrent, (summary) => {
+                const progressValue = summary.loaded + summary.failed;
+                if (progressValue === lastProgressValue) {
+                    return;
+                }
+                lastProgressValue = progressValue;
+                dom.setLoaderText(`Preloading images... ${progressValue}/${summary.total}`);
+            });
+            if (preloadResult.failed > 0) {
+                console.warn(`Image preload completed with ${preloadResult.failed} failed requests.`);
+            }
+        }
         const poseIndex = createPoseIndex(metadata);
         const poseBounds = derivePoseBounds(metadata);
         dom.hideLoader();
@@ -606,6 +713,13 @@
         }
         const initialPose = pickInitialPose(metadata, poseBounds);
         commandQueue.enqueue(initialPose.yaw, initialPose.pitch);
+        if (preloadPlan.backgroundSources.length > 0) {
+            void preloadImages(preloadPlan.backgroundSources, PRELOAD_CONFIG.backgroundMaxConcurrent, () => undefined).then((summary) => {
+                if (summary.failed > 0) {
+                    console.warn(`Background preload completed with ${summary.failed} failed requests.`);
+                }
+            });
+        }
     };
     void initializeFacePose();
 })();
