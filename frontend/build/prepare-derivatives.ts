@@ -36,7 +36,7 @@ const PUPPETEER_CHROME_PATH =
   process.env.PUPPETEER_CHROME_PATH ??
   "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
 const PROGRESSIVE_ATLAS_VARIANTS = [
-  { suffix: "low", tileSize: 128, quality: 26 },
+  { suffix: "low", tileSize: 64, quality: 20 },
   { suffix: "mid", tileSize: 320, quality: 30 },
   { suffix: "high", tileSize: OUTPUT_SIZE, quality: ATLAS_WEBP_QUALITY },
 ] as const;
