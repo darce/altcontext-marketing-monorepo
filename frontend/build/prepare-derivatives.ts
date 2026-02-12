@@ -2,15 +2,27 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
+import puppeteer from "puppeteer";
 
 const INPUT_DIR = "./input-images";
 const SOURCE_METADATA_FILE = "./public/metadata-source.json";
 const RUNTIME_METADATA_FILE = "./public/metadata.json";
 const OUTPUT_IMAGE_DIR = "./public/input-images";
+const OUTPUT_ATLAS_DIR = "./public/atlases";
 
 const CROP_BUFFER = 0.4;
 const OUTPUT_SIZE = 640;
-const WEBP_QUALITY = 60;
+const DERIVATIVE_WEBP_QUALITY = 42;
+const DERIVATIVE_WEBP_METHOD = 6;
+const DERIVATIVE_WEBP_SNS_STRENGTH = 85;
+const DERIVATIVE_WEBP_FILTER_STRENGTH = 35;
+const DERIVATIVE_WEBP_ALPHA_QUALITY = 80;
+const ATLAS_GRID_SIZE = 8;
+const ATLAS_WEBP_QUALITY = 34;
+const ATLAS_WEBP_METHOD = 6;
+const ATLAS_WEBP_ALPHA_QUALITY = 75;
+const DERIVATIVE_LAYOUT_VERSION = "headless-align-v1";
+const OUTPUT_LAYOUT_STAMP_FILE = path.join(OUTPUT_IMAGE_DIR, ".layout-version");
 const COORDINATE_DECIMALS = 4;
 const POSE_DECIMALS = 2;
 const SCALE_DECIMALS = 6;
@@ -19,6 +31,66 @@ const ALIGNMENT_MARGIN_RATIO = 0.09;
 const ALIGNMENT_TARGET_EYE_X_RATIO = 0.5;
 const ALIGNMENT_TARGET_EYE_Y_RATIO = 0.44;
 const ALIGNMENT_HEAD_SCALE_FACTOR = 0.9;
+const PRELOAD_TIER_STEPS = [3, 2, 1] as const;
+const PUPPETEER_CHROME_PATH =
+  process.env.PUPPETEER_CHROME_PATH ??
+  "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+const PROGRESSIVE_ATLAS_VARIANTS = [
+  { suffix: "low", tileSize: 128, quality: 26 },
+  { suffix: "mid", tileSize: 320, quality: 30 },
+  { suffix: "high", tileSize: OUTPUT_SIZE, quality: ATLAS_WEBP_QUALITY },
+] as const;
+type ProgressiveAtlasVariant = (typeof PROGRESSIVE_ATLAS_VARIANTS)[number];
+const IDENTITY_RUNTIME_TRANSFORM: RuntimeTransform = {
+  translateXRatio: 0,
+  translateYRatio: 0,
+  rotateRad: 0,
+  scale: 1,
+};
+const CANVAS_TEMPLATE = `<!doctype html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;background:transparent;">
+  <canvas id="canvas" width="640" height="640"></canvas>
+  <script>
+    window.__acxRender = async (inputUrl, outputPath, transformCss) => {
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d", { alpha: true });
+      if (!ctx) {
+        throw new Error("2D canvas context unavailable.");
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const image = new Image();
+      image.src = inputUrl;
+      await image.decode();
+
+      ctx.save();
+      ctx.imageSmoothingEnabled = true;
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const matrix = new DOMMatrix(transformCss);
+      ctx.setTransform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
+      ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+      ctx.restore();
+
+      const blob = await new Promise((resolve) =>
+        canvas.toBlob(resolve, "image/png")
+      );
+      if (!blob) {
+        throw new Error("Canvas toBlob returned null.");
+      }
+
+      const bytes = new Uint8Array(await blob.arrayBuffer());
+      await window.__acxWriteFile(outputPath, Array.from(bytes));
+      return bytes.length;
+    };
+  </script>
+</body>
+</html>`;
+
+type PreloadTier = 0 | 1 | 2 | 3;
 
 interface Point {
   x: number;
@@ -63,6 +135,8 @@ interface RuntimeMetadataItem {
   interocularDist: number;
   interocularBlend: number;
   transform: RuntimeTransform;
+  atlas?: RuntimeAtlasPlacement;
+  preloadTier?: PreloadTier;
   features: {
     eyes: { l: Point; r: Point };
     mouth: { l: Point; r: Point };
@@ -88,6 +162,40 @@ interface RuntimeTransform {
   translateYRatio: number;
   rotateRad: number;
   scale: number;
+}
+
+interface RuntimeAtlasPlacement {
+  files: RuntimeAtlasFileMap;
+  column: number;
+  row: number;
+  gridSize: number;
+}
+
+interface RuntimeAtlasFileMap {
+  low: string;
+  mid: string;
+  high: string;
+}
+
+interface AtlasBuildStats {
+  atlasCount: number;
+  tileCount: number;
+  sourceBytes: number;
+  atlasBytes: number;
+}
+
+interface AtlasBuildResult {
+  placementsByFile: Map<string, RuntimeAtlasPlacement>;
+  stats: AtlasBuildStats;
+}
+
+interface BrowserRenderer {
+  renderAlignedTile: (
+    inputPath: string,
+    outputPath: string,
+    transformCss: string,
+  ) => Promise<void>;
+  close: () => Promise<void>;
 }
 
 type JsonRecord = Record<string, unknown>;
@@ -597,10 +705,7 @@ const mapRegionToCrop = (
   };
 };
 
-/**
- * Precompute a normalized transform so runtime can align faces without
- * recalculating geometry for every frame.
- */
+/** Compute a normalized transform used to pre-bake face alignment at build time. */
 const computeRuntimeTransform = (
   eyeLeft: Point,
   eyeRight: Point,
@@ -719,8 +824,8 @@ const buildRuntimeMetadata = (
   return runtime;
 };
 
-/** Render a cropped WebP derivative for the selected crop box. */
-const renderDerivative = (
+/** Render a cropped square PNG derivative for a metadata record. */
+const renderCroppedDerivative = (
   sourcePath: string,
   outputPath: string,
   crop: CropBox,
@@ -736,15 +841,150 @@ const renderDerivative = (
       "+repage",
       "-resize",
       `${OUTPUT_SIZE}x${OUTPUT_SIZE}!`,
+      "-background",
+      "none",
+      "-alpha",
+      "set",
       "-strip",
-      "-quality",
-      String(WEBP_QUALITY),
-      "-define",
-      "webp:method=6",
       outputPath,
     ],
     { stdio: "pipe" },
   );
+};
+
+/** Convert normalized transform fields into an SVG/CSS matrix() string. */
+const toRuntimeTransformCss = (transform: RuntimeTransform): string => {
+  const cos = Math.cos(transform.rotateRad);
+  const sin = Math.sin(transform.rotateRad);
+  const a = roundTo(transform.scale * cos, SCALE_DECIMALS);
+  const b = roundTo(transform.scale * sin, SCALE_DECIMALS);
+  const c = roundTo(-transform.scale * sin, SCALE_DECIMALS);
+  const d = roundTo(transform.scale * cos, SCALE_DECIMALS);
+  const e = roundTo(transform.translateXRatio * OUTPUT_SIZE, SCALE_DECIMALS);
+  const f = roundTo(transform.translateYRatio * OUTPUT_SIZE, SCALE_DECIMALS);
+  return `matrix(${a}, ${b}, ${c}, ${d}, ${e}, ${f})`;
+};
+
+/** Encode a transformed PNG into final WebP output with deterministic settings. */
+const encodeDerivativeWebp = (sourcePath: string, outputPath: string): void => {
+  execFileSync(
+    "magick",
+    [
+      sourcePath,
+      "-strip",
+      "-quality",
+      String(DERIVATIVE_WEBP_QUALITY),
+      "-define",
+      `webp:method=${DERIVATIVE_WEBP_METHOD}`,
+      "-define",
+      `webp:sns-strength=${DERIVATIVE_WEBP_SNS_STRENGTH}`,
+      "-define",
+      `webp:filter-strength=${DERIVATIVE_WEBP_FILTER_STRENGTH}`,
+      "-define",
+      `webp:alpha-quality=${DERIVATIVE_WEBP_ALPHA_QUALITY}`,
+      "-define",
+      "webp:use-sharp-yuv=true",
+      outputPath,
+    ],
+    { stdio: "pipe" },
+  );
+};
+
+const deleteFileIfExists = (filePath: string): void => {
+  if (fs.existsSync(filePath)) {
+    fs.rmSync(filePath, { force: true });
+  }
+};
+
+/** Launch a shared headless renderer so all alignment math runs in browser canvas. */
+const createBrowserRenderer = async (): Promise<BrowserRenderer> => {
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: PUPPETEER_CHROME_PATH,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--allow-file-access-from-files",
+    ],
+  });
+  const page = await browser.newPage();
+  await page.setViewport({
+    width: OUTPUT_SIZE,
+    height: OUTPUT_SIZE,
+    deviceScaleFactor: 1,
+  });
+  await page.exposeFunction(
+    "__acxWriteFile",
+    async (outputPath: string, bytes: number[]): Promise<void> => {
+      fs.writeFileSync(outputPath, Buffer.from(bytes));
+    },
+  );
+  await page.setContent(CANVAS_TEMPLATE, { waitUntil: "domcontentloaded" });
+
+  const renderAlignedTile = async (
+    inputPath: string,
+    outputPath: string,
+    transformCss: string,
+  ): Promise<void> => {
+    const inputBytes = fs.readFileSync(path.resolve(inputPath));
+    const inputUrl = `data:image/png;base64,${inputBytes.toString("base64")}`;
+    const absoluteOutputPath = path.resolve(outputPath);
+    await page.evaluate(
+      async (payload: {
+        inputUrl: string;
+        outputPath: string;
+        transformCss: string;
+      }) => {
+        const renderRaw = (
+          globalThis as unknown as { __acxRender?: unknown }
+        ).__acxRender;
+        if (typeof renderRaw !== "function") {
+          throw new Error("Canvas renderer is unavailable in headless page.");
+        }
+
+        await (
+          renderRaw as (
+            inputUrl: string,
+            outputPath: string,
+            transformCss: string,
+          ) => Promise<number>
+        )(payload.inputUrl, payload.outputPath, payload.transformCss);
+      },
+      { inputUrl, outputPath: absoluteOutputPath, transformCss },
+    );
+  };
+
+  const close = async (): Promise<void> => {
+    await page.close();
+    await browser.close();
+  };
+
+  return { renderAlignedTile, close };
+};
+
+/** Crop, align (via browser canvas), and encode a final derivative tile. */
+const bakeAlignedDerivative = async (
+  renderer: BrowserRenderer,
+  sourcePath: string,
+  outputPath: string,
+  crop: CropBox,
+  alignmentTransform: RuntimeTransform,
+): Promise<void> => {
+  const tempBasePngPath = `${outputPath}.base.png`;
+  const tempAlignedPngPath = `${outputPath}.aligned.png`;
+
+  try {
+    renderCroppedDerivative(sourcePath, tempBasePngPath, crop);
+    await renderer.renderAlignedTile(
+      tempBasePngPath,
+      tempAlignedPngPath,
+      toRuntimeTransformCss(alignmentTransform),
+    );
+    encodeDerivativeWebp(tempAlignedPngPath, outputPath);
+  } finally {
+    deleteFileIfExists(tempBasePngPath);
+    deleteFileIfExists(tempAlignedPngPath);
+  }
 };
 
 const cleanOutputDir = (dirPath: string): void => {
@@ -752,6 +992,24 @@ const cleanOutputDir = (dirPath: string): void => {
     fs.rmSync(dirPath, { recursive: true, force: true });
   }
   fs.mkdirSync(dirPath, { recursive: true });
+};
+
+const readLayoutVersionStamp = (): string | undefined => {
+  if (!fs.existsSync(OUTPUT_LAYOUT_STAMP_FILE)) {
+    return undefined;
+  }
+
+  const raw = fs.readFileSync(OUTPUT_LAYOUT_STAMP_FILE, "utf8").trim();
+  return raw.length > 0 ? raw : undefined;
+};
+
+const writeLayoutVersionStamp = (): void => {
+  ensureDir(OUTPUT_IMAGE_DIR);
+  fs.writeFileSync(
+    OUTPUT_LAYOUT_STAMP_FILE,
+    `${DERIVATIVE_LAYOUT_VERSION}\n`,
+    "utf8",
+  );
 };
 
 const matchesSubsetPrefix = (fileName: string, prefixes: string[]): boolean => {
@@ -790,15 +1048,19 @@ const prepareOutputDirectory = (options: BuildOptions): void => {
     return;
   }
 
-  const isFullSelection =
-    options.subsetPrefixes.length === 0 && options.limit === 0;
-  if (options.recropMode === "all" && isFullSelection) {
+  if (options.recropMode === "all" && isFullSelection(options)) {
     cleanOutputDir(OUTPUT_IMAGE_DIR);
     return;
   }
 
   ensureDir(OUTPUT_IMAGE_DIR);
 };
+
+const isFullSelection = (options: BuildOptions): boolean =>
+  options.subsetPrefixes.length === 0 && options.limit === 0;
+
+const shouldWriteLayoutVersionStamp = (options: BuildOptions): boolean =>
+  options.recropMode === "all" && isFullSelection(options);
 
 const shouldRenderDerivative = (
   recropMode: RecropMode,
@@ -813,11 +1075,11 @@ const shouldRenderDerivative = (
   return false;
 };
 
-/** Build runtime metadata and optionally recrop images based on recrop mode. */
-const processSourceItems = (
+/** Build runtime metadata and optionally rebake derivatives based on recrop mode. */
+const processSourceItems = async (
   sourceItems: SourceMetadataItem[],
   options: BuildOptions,
-): ProcessStats => {
+): Promise<ProcessStats> => {
   const runtimeItems: RuntimeMetadataItem[] = [];
   const missingOutputs: string[] = [];
 
@@ -825,57 +1087,82 @@ const processSourceItems = (
   let reusedCount = 0;
   let renderedSourceBytes = 0;
   let renderedOutputBytes = 0;
+  let renderer: BrowserRenderer | undefined;
 
-  for (let index = 0; index < sourceItems.length; index += 1) {
-    const item = sourceItems[index];
-    const sourceFieldPath = `metadata[${index}].source`;
-    const outputFieldPath = `metadata[${index}].file`;
-
-    let sourcePath: string;
-    let outputPath: string;
-
-    try {
-      sourcePath = resolvePathWithin(INPUT_DIR, item.source, sourceFieldPath);
-      outputPath = resolvePathWithin(
-        OUTPUT_IMAGE_DIR,
-        item.file,
-        outputFieldPath,
-      );
-    } catch (error) {
-      throw new Error(errorMessage(error));
+  const getRenderer = async (): Promise<BrowserRenderer> => {
+    if (!renderer) {
+      renderer = await createBrowserRenderer();
     }
+    return renderer;
+  };
 
-    if (!fs.existsSync(sourcePath)) {
-      throw new Error(`Source image missing: ${sourcePath}`);
+  try {
+    for (let index = 0; index < sourceItems.length; index += 1) {
+      const item = sourceItems[index];
+      const sourceFieldPath = `metadata[${index}].source`;
+      const outputFieldPath = `metadata[${index}].file`;
+
+      let sourcePath: string;
+      let outputPath: string;
+
+      try {
+        sourcePath = resolvePathWithin(INPUT_DIR, item.source, sourceFieldPath);
+        outputPath = resolvePathWithin(
+          OUTPUT_IMAGE_DIR,
+          item.file,
+          outputFieldPath,
+        );
+      } catch (error) {
+        throw new Error(errorMessage(error));
+      }
+
+      if (!fs.existsSync(sourcePath)) {
+        throw new Error(`Source image missing: ${sourcePath}`);
+      }
+
+      const outputExists = fs.existsSync(outputPath);
+      if (options.recropMode === "none" && !outputExists) {
+        missingOutputs.push(item.file);
+        continue;
+      }
+
+      const size = getImageSize(sourcePath);
+      const crop = computeCrop(item, size);
+      const runtimeMetadata = buildRuntimeMetadata(item, size, crop);
+
+      if (shouldRenderDerivative(options.recropMode, outputExists)) {
+        const activeRenderer = await getRenderer();
+        await bakeAlignedDerivative(
+          activeRenderer,
+          sourcePath,
+          outputPath,
+          crop,
+          runtimeMetadata.transform,
+        );
+        renderedCount += 1;
+        renderedSourceBytes += fs.statSync(sourcePath).size;
+        renderedOutputBytes += fs.statSync(outputPath).size;
+      } else {
+        reusedCount += 1;
+      }
+
+      if (!fs.existsSync(outputPath)) {
+        missingOutputs.push(item.file);
+        continue;
+      }
+
+      runtimeItems.push({
+        ...runtimeMetadata,
+        transform: IDENTITY_RUNTIME_TRANSFORM,
+      });
+
+      if (options.verbose && (index + 1) % PROGRESS_LOG_INTERVAL === 0) {
+        console.log(`⏱️ Derivatives: ${index + 1}/${sourceItems.length}`);
+      }
     }
-
-    const outputExists = fs.existsSync(outputPath);
-    if (options.recropMode === "none" && !outputExists) {
-      missingOutputs.push(item.file);
-      continue;
-    }
-
-    const size = getImageSize(sourcePath);
-    const crop = computeCrop(item, size);
-
-    if (shouldRenderDerivative(options.recropMode, outputExists)) {
-      renderDerivative(sourcePath, outputPath, crop);
-      renderedCount += 1;
-      renderedSourceBytes += fs.statSync(sourcePath).size;
-      renderedOutputBytes += fs.statSync(outputPath).size;
-    } else {
-      reusedCount += 1;
-    }
-
-    if (!fs.existsSync(outputPath)) {
-      missingOutputs.push(item.file);
-      continue;
-    }
-
-    runtimeItems.push(buildRuntimeMetadata(item, size, crop));
-
-    if (options.verbose && (index + 1) % PROGRESS_LOG_INTERVAL === 0) {
-      console.log(`⏱️ Derivatives: ${index + 1}/${sourceItems.length}`);
+  } finally {
+    if (renderer !== undefined) {
+      await renderer.close();
     }
   }
 
@@ -887,6 +1174,309 @@ const processSourceItems = (
     renderedSourceBytes,
     renderedOutputBytes,
   };
+};
+
+const toPoseBucketKey = (item: RuntimeMetadataItem, step: number): string => {
+  const yawBucket = Math.round(item.pose.yaw / step);
+  const pitchBucket = Math.round(item.pose.pitch / step);
+  const rollBucket = Math.round(item.pose.roll / step);
+  return `${yawBucket}:${pitchBucket}:${rollBucket}`;
+};
+
+/**
+ * Select one representative per pose bucket, preferring larger face scale.
+ */
+const buildRepresentativeFileSet = (
+  runtimeItems: RuntimeMetadataItem[],
+  step: number,
+): Set<string> => {
+  const representativeByBucket = new Map<string, RuntimeMetadataItem>();
+
+  for (const item of runtimeItems) {
+    const key = toPoseBucketKey(item, step);
+    const previous = representativeByBucket.get(key);
+    if (!previous) {
+      representativeByBucket.set(key, item);
+      continue;
+    }
+
+    if (item.interocularDist > previous.interocularDist) {
+      representativeByBucket.set(key, item);
+      continue;
+    }
+    if (
+      item.interocularDist === previous.interocularDist &&
+      compareStrings(item.file, previous.file) < 0
+    ) {
+      representativeByBucket.set(key, item);
+    }
+  }
+
+  return new Set(
+    Array.from(representativeByBucket.values()).map((item) => item.file),
+  );
+};
+
+/**
+ * Label each runtime item with the coarsest preload tier that includes it.
+ * Tier order: 3° seed -> 2° backfill -> 1° backfill -> remainder.
+ */
+const buildPreloadTierByFile = (
+  runtimeItems: RuntimeMetadataItem[],
+): Map<string, PreloadTier> => {
+  const rep3 = buildRepresentativeFileSet(runtimeItems, PRELOAD_TIER_STEPS[0]);
+  const rep2 = buildRepresentativeFileSet(runtimeItems, PRELOAD_TIER_STEPS[1]);
+  const rep1 = buildRepresentativeFileSet(runtimeItems, PRELOAD_TIER_STEPS[2]);
+  const tierByFile = new Map<string, PreloadTier>();
+
+  for (const item of runtimeItems) {
+    if (rep3.has(item.file)) {
+      tierByFile.set(item.file, 3);
+      continue;
+    }
+    if (rep2.has(item.file)) {
+      tierByFile.set(item.file, 2);
+      continue;
+    }
+    if (rep1.has(item.file)) {
+      tierByFile.set(item.file, 1);
+      continue;
+    }
+    tierByFile.set(item.file, 0);
+  }
+
+  return tierByFile;
+};
+
+const logPreloadTierSummary = (
+  tierByFile: Map<string, PreloadTier>,
+  verbose: boolean,
+): void => {
+  if (!verbose) {
+    return;
+  }
+
+  let tier3 = 0;
+  let tier2 = 0;
+  let tier1 = 0;
+  let tier0 = 0;
+
+  for (const tier of tierByFile.values()) {
+    if (tier === 3) {
+      tier3 += 1;
+      continue;
+    }
+    if (tier === 2) {
+      tier2 += 1;
+      continue;
+    }
+    if (tier === 1) {
+      tier1 += 1;
+      continue;
+    }
+    tier0 += 1;
+  }
+
+  console.log(
+    `🧭 Preload tiers: tier3=${tier3}, tier2=${tier2}, tier1=${tier1}, tier0=${tier0}`,
+  );
+};
+
+const comparePose = (left: RuntimeMetadataItem, right: RuntimeMetadataItem): number => {
+  if (left.pose.yaw !== right.pose.yaw) {
+    return left.pose.yaw - right.pose.yaw;
+  }
+  if (left.pose.pitch !== right.pose.pitch) {
+    return left.pose.pitch - right.pose.pitch;
+  }
+  if (left.pose.roll !== right.pose.roll) {
+    return left.pose.roll - right.pose.roll;
+  }
+  return compareStrings(left.file, right.file);
+};
+
+const toAtlasBaseName = (index: number): string => {
+  return `faces-atlas-${String(index + 1).padStart(3, "0")}`;
+};
+
+const toAtlasVariantFileName = (
+  index: number,
+  variant: ProgressiveAtlasVariant,
+): string => {
+  return `${toAtlasBaseName(index)}-${variant.suffix}.webp`;
+};
+
+/** Build one quality tier of an atlas and return compressed output byte size. */
+const buildAtlasVariant = (
+  chunk: RuntimeMetadataItem[],
+  atlasIndex: number,
+  variant: ProgressiveAtlasVariant,
+): { fileName: string; bytes: number } => {
+  const fileName = toAtlasVariantFileName(atlasIndex, variant);
+  const outputPath = path.join(OUTPUT_ATLAS_DIR, fileName);
+  const tileSize = variant.tileSize;
+  const atlasDimension = tileSize * ATLAS_GRID_SIZE;
+
+  const args: string[] = ["-size", `${atlasDimension}x${atlasDimension}`, "xc:none"];
+
+  for (let tileIndex = 0; tileIndex < chunk.length; tileIndex += 1) {
+    const item = chunk[tileIndex];
+    const sourcePath = path.join(OUTPUT_IMAGE_DIR, item.file);
+    const column = tileIndex % ATLAS_GRID_SIZE;
+    const row = Math.floor(tileIndex / ATLAS_GRID_SIZE);
+    if (tileSize === OUTPUT_SIZE) {
+      args.push(sourcePath);
+    } else {
+      args.push("(", sourcePath, "-resize", `${tileSize}x${tileSize}!`, ")");
+    }
+
+    args.push(
+      "-geometry",
+      `+${column * tileSize}+${row * tileSize}`,
+      "-composite",
+    );
+  }
+
+  args.push(
+    "-strip",
+    "-quality",
+    String(variant.quality),
+    "-define",
+    `webp:method=${ATLAS_WEBP_METHOD}`,
+    "-define",
+    `webp:alpha-quality=${ATLAS_WEBP_ALPHA_QUALITY}`,
+    "-define",
+    "webp:use-sharp-yuv=true",
+    outputPath,
+  );
+
+  execFileSync("magick", args, { stdio: "pipe" });
+  return { fileName, bytes: fs.statSync(outputPath).size };
+};
+
+/**
+ * Pack cropped derivatives into fixed-grid atlases to reduce runtime requests.
+ * Atlas pages are deterministic by sorting runtime items by output filename.
+ */
+const buildAtlases = (
+  runtimeItems: RuntimeMetadataItem[],
+  tierByFile: Map<string, PreloadTier>,
+  verbose: boolean,
+): AtlasBuildResult => {
+  cleanOutputDir(OUTPUT_ATLAS_DIR);
+
+  const sorted = [...runtimeItems].sort((left, right) => {
+    const leftTier = tierByFile.get(left.file) ?? 0;
+    const rightTier = tierByFile.get(right.file) ?? 0;
+    if (leftTier !== rightTier) {
+      return rightTier - leftTier;
+    }
+    return comparePose(left, right);
+  });
+  const itemsPerAtlas = ATLAS_GRID_SIZE * ATLAS_GRID_SIZE;
+
+  const placementsByFile = new Map<string, RuntimeAtlasPlacement>();
+  let sourceBytes = 0;
+  let atlasBytes = 0;
+
+  for (
+    let atlasIndex = 0;
+    atlasIndex * itemsPerAtlas < sorted.length;
+    atlasIndex += 1
+  ) {
+    const start = atlasIndex * itemsPerAtlas;
+    const chunk = sorted.slice(start, start + itemsPerAtlas);
+
+    for (let tileIndex = 0; tileIndex < chunk.length; tileIndex += 1) {
+      const item = chunk[tileIndex];
+      const column = tileIndex % ATLAS_GRID_SIZE;
+      const row = Math.floor(tileIndex / ATLAS_GRID_SIZE);
+      const sourcePath = path.join(OUTPUT_IMAGE_DIR, item.file);
+
+      if (!fs.existsSync(sourcePath)) {
+        throw new Error(
+          `Atlas source derivative missing for ${item.file} at ${sourcePath}`,
+        );
+      }
+
+      sourceBytes += fs.statSync(sourcePath).size;
+
+      if (!placementsByFile.has(item.file)) {
+        const files: RuntimeAtlasFileMap = {
+          low: "",
+          mid: "",
+          high: "",
+        };
+        placementsByFile.set(item.file, {
+          files,
+          column,
+          row,
+          gridSize: ATLAS_GRID_SIZE,
+        });
+      }
+    }
+
+    const variantOutputs = PROGRESSIVE_ATLAS_VARIANTS.map((variant) =>
+      buildAtlasVariant(chunk, atlasIndex, variant),
+    );
+    for (let tileIndex = 0; tileIndex < chunk.length; tileIndex += 1) {
+      const item = chunk[tileIndex];
+      const placement = placementsByFile.get(item.file);
+      if (!placement) {
+        throw new Error(`Missing atlas placement for ${item.file}`);
+      }
+
+      for (let variantIndex = 0; variantIndex < PROGRESSIVE_ATLAS_VARIANTS.length; variantIndex += 1) {
+        const variant = PROGRESSIVE_ATLAS_VARIANTS[variantIndex];
+        const output = variantOutputs[variantIndex];
+        placement.files[variant.suffix] = output.fileName;
+      }
+    }
+
+    atlasBytes += variantOutputs.reduce((total, output) => total + output.bytes, 0);
+
+    if (verbose) {
+      const sizeLabel = variantOutputs
+        .map((output) => {
+          const megabytes = (output.bytes / 1024 / 1024).toFixed(2);
+          return `${output.fileName}=${megabytes}MB`;
+        })
+        .join(", ");
+      console.log(
+        `🗂️ Atlas ${toAtlasBaseName(atlasIndex)}: ${chunk.length} tiles (${sizeLabel})`,
+      );
+    }
+  }
+
+  return {
+    placementsByFile,
+    stats: {
+      atlasCount: Math.ceil(sorted.length / itemsPerAtlas),
+      tileCount: sorted.length,
+      sourceBytes,
+      atlasBytes,
+    },
+  };
+};
+
+/** Attach atlas placement fields to each runtime metadata record. */
+const attachAtlasPlacements = (
+  runtimeItems: RuntimeMetadataItem[],
+  placementsByFile: Map<string, RuntimeAtlasPlacement>,
+  tierByFile: Map<string, PreloadTier>,
+): RuntimeMetadataItem[] => {
+  return runtimeItems.map((item) => {
+    const atlasPlacement = placementsByFile.get(item.file);
+    if (!atlasPlacement) {
+      throw new Error(`Missing atlas placement for runtime file ${item.file}`);
+    }
+
+    return {
+      ...item,
+      atlas: atlasPlacement,
+      preloadTier: tierByFile.get(item.file) ?? 0,
+    };
+  });
 };
 
 const writeRuntimeMetadata = (
@@ -933,16 +1523,14 @@ const logOutcome = (
   sourceCount: number,
   stats: ProcessStats,
   mode: RecropMode,
+  atlasStats: AtlasBuildStats,
 ): void => {
   if (mode === "none") {
     console.log(
       `✅ Wrote runtime metadata for ${stats.runtimeItems.length}/${sourceCount} derivatives to ${RUNTIME_METADATA_FILE}`,
     );
     console.log(`♻️ Reused existing derivatives: ${stats.reusedCount}`);
-    return;
-  }
-
-  if (mode === "missing") {
+  } else if (mode === "missing") {
     console.log(
       `✅ Wrote runtime metadata for ${stats.runtimeItems.length} derivatives to ${RUNTIME_METADATA_FILE}`,
     );
@@ -966,6 +1554,15 @@ const logOutcome = (
         `from ${(stats.renderedSourceBytes / 1024 / 1024).toFixed(2)} MB (${ratio.toFixed(1)}%)`,
     );
   }
+
+  const atlasRatio =
+    atlasStats.sourceBytes > 0
+      ? (atlasStats.atlasBytes / atlasStats.sourceBytes) * 100
+      : 0;
+  console.log(
+    `🗂️ Atlas output: ${atlasStats.atlasCount} file(s), ${atlasStats.tileCount} faces, ` +
+      `${(atlasStats.atlasBytes / 1024 / 1024).toFixed(2)} MB from ${(atlasStats.sourceBytes / 1024 / 1024).toFixed(2)} MB (${atlasRatio.toFixed(1)}%)`,
+  );
 };
 
 const reportMissingOutputs = (missingOutputs: string[]): void => {
@@ -1020,9 +1617,23 @@ const main = async (): Promise<void> => {
 
   logSelection(selectedItems, options);
 
+  const existingLayoutVersion = readLayoutVersionStamp();
+  if (
+    existingLayoutVersion !== DERIVATIVE_LAYOUT_VERSION &&
+    options.recropMode !== "all"
+  ) {
+    const foundVersion = existingLayoutVersion ?? "missing";
+    console.error(
+      `❌ Derivative layout version is "${foundVersion}" but "${DERIVATIVE_LAYOUT_VERSION}" is required.`,
+    );
+    console.error("💡 Run `npm run build:data:derive:recrop` once to rebake aligned derivatives.");
+    process.exitCode = 1;
+    return;
+  }
+
   try {
     prepareOutputDirectory(options);
-    const stats = processSourceItems(selectedItems, options);
+    const stats = await processSourceItems(selectedItems, options);
 
     if (stats.missingOutputs.length > 0) {
       reportMissingOutputs(stats.missingOutputs);
@@ -1030,8 +1641,29 @@ const main = async (): Promise<void> => {
       return;
     }
 
-    writeRuntimeMetadata(RUNTIME_METADATA_FILE, stats.runtimeItems);
-    logOutcome(selectedItems.length, stats, options.recropMode);
+    const tierByFile = buildPreloadTierByFile(stats.runtimeItems);
+    logPreloadTierSummary(tierByFile, options.verbose);
+    const atlasBuild = buildAtlases(stats.runtimeItems, tierByFile, options.verbose);
+    const runtimeWithAtlas = attachAtlasPlacements(
+      stats.runtimeItems,
+      atlasBuild.placementsByFile,
+      tierByFile,
+    );
+
+    writeRuntimeMetadata(RUNTIME_METADATA_FILE, runtimeWithAtlas);
+    if (shouldWriteLayoutVersionStamp(options)) {
+      writeLayoutVersionStamp();
+    } else if (options.verbose && options.recropMode === "all") {
+      console.log(
+        "ℹ️ Skipped layout stamp update because recrop was limited by subset/limit flags.",
+      );
+    }
+    logOutcome(
+      selectedItems.length,
+      stats,
+      options.recropMode,
+      atlasBuild.stats,
+    );
   } catch (error) {
     console.error(`❌ Failed to prepare derivatives: ${errorMessage(error)}`);
     process.exitCode = 1;
