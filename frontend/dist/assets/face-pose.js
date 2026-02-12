@@ -8,10 +8,10 @@
         metadataTitle: "face-metadata-title",
     };
     const POSE_CONFIG = {
-        bucketStep: 1,
-        poseCellStep: 1,
+        bucketStep: 0.5,
+        poseCellStep: 0.25,
         sameCellExploreChance: 0,
-        sameCellMinSwitchIntervalMs: 220,
+        sameCellMinSwitchIntervalMs: 120,
         candidatePoolSize: 1,
         selectionTemperature: 1,
         recentHistoryLimit: 18,
@@ -21,9 +21,9 @@
         usagePenalty: 0,
         maxUsagePenalty: 0,
         usagePenaltyDistanceSq: 64,
-        switchMargin: 14,
-        minSwitchIntervalMs: 140,
-        fastSwitchMargin: 38,
+        switchMargin: 12,
+        minSwitchIntervalMs: 90,
+        fastSwitchMargin: 24,
         notLoadedSourcePenalty: 0,
         defaultMaxAbsYaw: 75,
         defaultMaxAbsPitch: 50,
@@ -37,6 +37,10 @@
         maxConcurrent: 12,
         backgroundMaxConcurrent: 8,
         stagedBucketSteps: [3, 2, 1],
+        initialBlockingLowTiers: [3, 2, 1],
+    };
+    const POINTER_NOISE_CONFIG = {
+        minPoseDeltaToUpdate: 0.05,
     };
     const METADATA_ERROR_HINT = "Metadata is missing precomputed face transforms. Run `npm --prefix frontend run build:derivatives`.";
     const isFiniteNumber = (value) => typeof value === "number" && Number.isFinite(value) && !Number.isNaN(value);
@@ -56,17 +60,17 @@
     /** Choose the sharpest already-loaded atlas variant for smooth progressive upgrades. */
     const resolveImageSource = (item, loadedSources) => {
         if (!item.atlas) {
-            return { source: toSingleSource(item), variant: "single" };
+            return { source: toSingleSource(item) };
         }
         const high = toVariantSource(item, "high");
         if (loadedSources.has(high)) {
-            return { source: high, variant: "high" };
+            return { source: high };
         }
         const mid = toVariantSource(item, "mid");
         if (loadedSources.has(mid)) {
-            return { source: mid, variant: "mid" };
+            return { source: mid };
         }
-        return { source: toVariantSource(item, "low"), variant: "low" };
+        return { source: toVariantSource(item, "low") };
     };
     const preloadImage = (source) => new Promise((resolve) => {
         const image = new Image();
@@ -148,7 +152,7 @@
                 }
                 return Array.from(sources).sort();
             };
-            const blockingSources = toTierVariantSources(3, "low");
+            const blockingSources = Array.from(new Set(PRELOAD_CONFIG.initialBlockingLowTiers.flatMap((tier) => toTierVariantSources(tier, "low")))).sort();
             const emittedSources = new Set(blockingSources);
             const backgroundStages = [];
             const pushStage = (tier, variant) => {
@@ -266,6 +270,7 @@
         selectionUsage: new Map(),
         recentFiles: [],
         loadedSources: new Set(),
+        lastPointerPose: null,
     });
     const asRecord = (value) => {
         if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -726,10 +731,10 @@
      * Runtime work is limited to source swap + applying precomputed transform.
      */
     const createFaceUpdater = (dom, state, poseIndex) => {
-        const applyItemFrame = (item, variant) => {
+        const applyItemFrame = (item) => {
             const transformCss = toTransformCss(item);
             dom.setImageTransform(transformCss);
-            dom.setImageRendering(variant === "low" ? "pixelated" : "auto");
+            dom.setImageRendering("pixelated");
             state.lastTransform = transformCss;
             state.hasTransform = true;
             dom.renderMetadata(item);
@@ -742,7 +747,7 @@
                 dom.image.src === nextSource &&
                 dom.image.naturalWidth > 0) {
                 state.loadedSources.add(nextSource);
-                applyItemFrame(item, nextResolved.variant);
+                applyItemFrame(item);
                 return;
             }
             if (state.hasTransform) {
@@ -751,7 +756,7 @@
             const token = state.token + 1;
             state.token = token;
             state.currentItem = item;
-            dom.setImageRendering(nextResolved.variant === "low" ? "pixelated" : "auto");
+            dom.setImageRendering("pixelated");
             dom.setImageSource(nextSource);
             if (!dom.image) {
                 return;
@@ -770,8 +775,7 @@
                     return;
                 }
                 state.loadedSources.add(nextSource);
-                const bestResolved = resolveImageSource(item, state.loadedSources);
-                applyItemFrame(item, bestResolved.variant);
+                applyItemFrame(item);
             }
             catch {
                 // Keep last good transform on load/decode failure.
@@ -873,6 +877,15 @@
                     return;
                 }
                 const pose = toPoseFromPointer(event, rect, poseBounds);
+                if (state.lastPointerPose) {
+                    const yawDelta = Math.abs(pose.yaw - state.lastPointerPose.yaw);
+                    const pitchDelta = Math.abs(pose.pitch - state.lastPointerPose.pitch);
+                    if (yawDelta < POINTER_NOISE_CONFIG.minPoseDeltaToUpdate &&
+                        pitchDelta < POINTER_NOISE_CONFIG.minPoseDeltaToUpdate) {
+                        return;
+                    }
+                }
+                state.lastPointerPose = pose;
                 commandQueue.enqueue(pose.yaw, pose.pitch);
             });
         }
