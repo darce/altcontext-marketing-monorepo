@@ -117,7 +117,7 @@
     blockUntilComplete: true,
     maxConcurrent: 12,
     backgroundMaxConcurrent: 8,
-    poseBucketStep: 2.5,
+    poseBucketStep: 5,
     rollBucketStep: 5,
   } as const;
 

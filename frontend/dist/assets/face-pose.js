@@ -35,7 +35,7 @@
         blockUntilComplete: true,
         maxConcurrent: 12,
         backgroundMaxConcurrent: 8,
-        poseBucketStep: 2.5,
+        poseBucketStep: 5,
         rollBucketStep: 5,
     };
     const METADATA_ERROR_HINT = "Metadata is missing precomputed face transforms. Run `npm --prefix frontend run build:derivatives`.";
