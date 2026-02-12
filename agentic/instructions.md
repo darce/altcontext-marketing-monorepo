@@ -1,381 +1,375 @@
-# Agentic Instructions — Fastest Possible FCP (Marketing Site)
+# Agentic Instructions: AltContext Marketing Monorepo
 
-This file defines **non-negotiable performance constraints** and **build patterns** for achieving the fastest practical First Contentful Paint (FCP) on a marketing site delivered via **Apache + static files**, with optional **PHP/MySQL** at runtime.
+This document defines the performance, build, and coding rules for the marketing monorepo.
 
-**First pass:** no component framework; no SPA; no runtime build step.  
-**Later:** re-evaluate if introducing Web Components / Custom Elements.
-
----
-
-## 0) Runtime constraints (hard)
-
-### Production hosting environment
-- **Basic web hosting** (shared/cheap): Apache + static files.
-- Runtime languages available: **PHP** (yes), **MySQL/MariaDB** (yes).
-- Runtime languages NOT available: **Python/Node** (assume no).
-- Therefore: **all bundling / SCSS compilation / critical CSS extraction happens at build time** (local or CI), and the output is uploaded.
-
-### Local dev environment
-- Local server is **macOS Apache** (Apple `/etc/apache2` or Homebrew Apache).
-- PHP available locally (mod_php or php-fpm depending on setup).
+The current monorepo structure is:
+- `frontend/`: static marketing site and build tooling
+- `backend/`: email collection and marketing intelligence server
 
 ---
 
-## 1) Goals and non‑goals
+## Quick Navigation
+
+- [Project Context](#project-context)
+- [Goals and Budgets](#goals-and-budgets)
+- [Runtime and Hosting Constraints](#runtime-and-hosting-constraints)
+- [Monorepo Architecture](#monorepo-architecture)
+- [Build Pipeline and Scripts](#build-pipeline-and-scripts)
+- [Critical CSS Strategy](#critical-css-strategy)
+- [Frontend Authoring Rules](#frontend-authoring-rules)
+- [Runtime JavaScript Rules](#runtime-javascript-rules)
+- [Backend Service Rules](#backend-service-rules)
+- [Local Development (macOS Apache)](#local-development-macos-apache)
+- [Python Standards (`frontend/offline-scripts/`)](#python-standards-frontendoffline-scripts)
+- [TypeScript Standards (Build Tooling)](#typescript-standards-build-tooling)
+- [Verification Gates](#verification-gates)
+- [Agent Rules of Engagement](#agent-rules-of-engagement)
+
+---
+
+<a id="project-context"></a>
+## 1. Project Context
+
+- Frontend is an MPA-style static site generated into `frontend/dist/`.
+- Backend is a separate service for email capture and marketing intelligence.
+- Marketing pages must remain fast and static-first even when backend integrations are enabled.
+
+---
+
+<a id="goals-and-budgets"></a>
+## 2. Goals and Budgets
 
 ### Primary goal
-- **Minimize FCP** on a cold-cache visit under mobile-like conditions.
+- Minimize First Contentful Paint (FCP) on cold-cache mobile-like conditions.
 
 ### Secondary goals
-- Keep CLS low (avoid visible layout jumps) without sacrificing FCP.
-- Keep pipeline simple; keep runtime dumb.
+- Keep Cumulative Layout Shift (CLS) low.
+- Keep runtime dependencies minimal.
 
-### Non‑goals (for now)
-- No SPA hydration framework.
-- No runtime Markdown/MDX parsing in the browser.
-- No client JS required for first paint.
-
----
-
-## 2) Measurable budgets (treat as hard constraints)
-
-### Critical path payload (initial response)
-- HTML + inlined critical CSS + critical inline JS (if any) target: **< 14KB compressed**.
-- Inlined critical CSS target: **2–8KB compressed** (smaller is better).
-
-### CSS budgets
-- Critical CSS: only above-the-fold layout/typography/hero.
-- Non-critical CSS (async): keep **< 30KB compressed** site-wide in first pass.
-
-### JS budgets
-- Default: **0KB required for first paint**.
-- If needed for progressive enhancement: **< 10KB compressed**, loaded **deferred**.
+### Budgets (treat as hard limits)
+- Critical path (HTML + inlined critical CSS + critical inline JS): `< 14KB` compressed.
+- Inlined critical CSS: `2KB` to `8KB` compressed.
+- Non-critical CSS loaded after first paint: `< 30KB` compressed.
+- Runtime JS required for first paint: default `0KB`.
+- Progressive enhancement JS (if required): `< 10KB` compressed and deferred.
 
 ---
 
-## 3) Architecture (first pass)
+<a id="runtime-and-hosting-constraints"></a>
+## 3. Runtime and Hosting Constraints
 
-### Rendering model
-- **Static HTML** pages (MPA).
-- Optional: build-time content pipeline for Markdown/MDX to HTML.
-- Optional: PHP endpoints for forms/proxy, but keep them off the paint-critical path.
-
-### Frontend stack (given)
-- TypeScript (**build tooling only**; runtime JS optional and minimal)
-- SCSS authored mobile-first → compiled to CSS
-- Responsive with `min-width` overrides
+- Build-time tools can use Node.js and Python locally/CI.
+- Deployment artifact for the marketing site is the contents of `frontend/dist/`.
+- Static hosting remains Apache-first.
+- Backend APIs are separate from paint-critical frontend delivery.
+- No build tool should assume Node/Python runtime is available on the static host.
 
 ---
 
-## 4) Build tooling (build-time only; output is static)
+<a id="monorepo-architecture"></a>
+## 4. Monorepo Architecture
 
-**Build environment:** Node.js is available for building (local + CI).  
-**Offline scripts:** Python is available locally for helper scripts in `offline-scripts/`.  
-**Runtime:** Apache static hosting with optional PHP/MySQL (no Node/Python runtime assumptions).
+```text
+./agentic/
+  instructions.md
 
-### Baseline approach (TS for tools only; near-zero runtime JS)
-Use a **Node-based asset pipeline** to compile SCSS into a static output folder (`dist/`). Use **TypeScript only for build scripts** (critical CSS, audits, content transforms). Do **not** require any runtime JS for the first paint.
+./backend/
+  package.json
+  server.js
 
-- SCSS → CSS (minified)
-- PostCSS Autoprefixer (+ optional cssnano) (recommended)
-- Linting + formatting gates (TS tools + SCSS)
-- Critical CSS extraction/inlining post-build (see §5)
-- Upload **contents of `dist/`** (+ any PHP endpoints) to hosting
+./frontend/
+  package.json
+  tsconfig.tools.json
+  build/
+    copy.ts
+    compress.ts
+    critcss.ts
+    extract-metadata.ts
+    prepare-derivatives.ts
+  styles/
+    site.scss
+    _tokens.scss
+    ...
+  src/
+  public/
+  offline-scripts/
+  dist/
+```
 
-### Recommended toolchain (no Vite required)
-- `sass` (Dart Sass) for SCSS compilation
-- `postcss-cli + autoprefixer (+ cssnano)` for post-processing/minification
-- `critical` (Penthouse) for critical CSS extraction/inlining
-- `TypeScript + tsx` to run build-tool scripts (`build/*.ts`) without a separate compilation step
-- ESLint (TypeScript tooling code)
-- Stylelint (SCSS/CSS)
-- Prettier (formatting)
-
-### Source of truth (confirmed paths)
-- `./package.json` — defines the build pipeline (**already configured**).
-- `./tsconfig.tools.json` — TypeScript settings for tooling only (**already configured**).
-- `./build/*.ts` — TypeScript build tooling (e.g. `critcss.ts`, `copy.ts`, `audit.ts`).
-- `./styles/site.scss` — SCSS entrypoint compiled into `dist/assets/site.css`.
-- `./dist/` — deploy artifact (static HTML + CSS + assets).
-- `./.htaccess` — **local dev routing only** (see §11). SHOULD be in `.gitignore`.
-
-### Required scripts (must exist in package.json)
-Agents must not remove these without replacing functionality:
-
-- `build` — produces a complete `dist/` ready to upload
-- `build:critcss` — extracts + inlines critical CSS for each route/page
-- `typecheck` — runs `tsc -p tsconfig.tools.json --noEmit`
-- `lint` / `stylelint` / `format` — enforce code style and prevent regressions
-
-### Critical CSS extraction: local Apache vs CI
-Critical CSS tooling needs an HTTP URL to render pages.
-
-- **Local dev (Apache):** base URL is `http://dev.test/altcontext-marketing/`
-- **CI:** if Apache isn’t available, `build/critcss.ts` should start a temporary static file server that serves `dist/` and then shut it down after extraction.
-
-**Implementation contract**
-- `build/critcss.ts` MUST accept `BASE_URL` (env var). Default to `http://dev.test/altcontext-marketing/`.
-- `build/critcss.ts` MUST run extraction at a mobile viewport first (e.g., 390×844) and inline the result into each HTML page.
-
-**Rule:** do not add a heavyweight dev server to production. The site remains static; servers are only for build-time rendering during critical CSS extraction.
+Notes:
+- `frontend/dist/` is deploy output.
+- `frontend/build/*.ts` are build tools only and are not shipped to runtime.
 
 ---
 
-## 5) Critical CSS strategy (core requirement)
+<a id="build-pipeline-and-scripts"></a>
+## 5. Build Pipeline and Scripts
 
-### Rule
-- **Inline only the minimum CSS needed to paint above-the-fold content.**
-- Load the remainder of CSS asynchronously.
+### Toolchain
+- `sass` for SCSS compilation
+- `postcss-cli` + `autoprefixer` + `cssnano`
+- `tsx` + TypeScript for build tooling
+- `critical` for critical CSS extraction/inlining
+- `eslint`, `stylelint`, `prettier` as quality gates
 
-### Implementation (build step)
-1. Build the site to `dist/`.
-2. Serve the output locally (or in CI) for extraction.
-3. For each route:
-   - Extract critical CSS (mobile viewport first).
-   - Inject it into the page `<head>` as `<style>…</style>`.
-   - Ensure full CSS loads **non-blocking**.
+### Canonical frontend scripts
+- Fast site build:
+  - `npm --prefix frontend run build`
+  - `npm --prefix frontend run build:web` (alias)
+- Full build (data + derivatives + assets):
+  - `npm --prefix frontend run build:full`
+- Full build with explicit recrop:
+  - `npm --prefix frontend run build:full:refresh`
+  - `npm --prefix frontend run build:full:refresh:missing`
+- Data-only pipeline:
+  - `npm --prefix frontend run build:data:extract`
+  - `npm --prefix frontend run build:data:derive`
+  - `npm --prefix frontend run build:data:derive:recrop`
+  - `npm --prefix frontend run build:data:derive:recrop:missing`
+- Asset-only pipeline:
+  - `npm --prefix frontend run build:assets`
+  - `npm --prefix frontend run build:assets:copy`
+  - `npm --prefix frontend run build:assets:css`
+  - `npm --prefix frontend run build:assets:postcss`
+  - `npm --prefix frontend run build:assets:compress`
+- Compatibility aliases:
+  - `npm --prefix frontend run build:metadata`
+  - `npm --prefix frontend run build:derivatives`
+  - `npm --prefix frontend run build:derivatives:recrop`
+  - `npm --prefix frontend run build:derivatives:recrop:missing`
 
-### Async CSS loading patterns (choose one)
+### Build-mode rules (speed)
+- Default builds must avoid expensive recropping.
+- Recropping must be opt-in through `--recrop=none|missing|all` or recrop scripts.
+- If derivatives are missing and recrop is not enabled, fail with an actionable command.
 
-**Pattern 1: media swap (simple, effective)**
+---
+
+<a id="critical-css-strategy"></a>
+## 6. Critical CSS Strategy
+
+### Rules
+- Inline only above-the-fold CSS required for first paint.
+- Load non-critical CSS asynchronously.
+- Extract critical CSS at a mobile viewport first.
+
+### Critical CSS contract
+- `frontend/build/critcss.ts` must accept `BASE_URL`.
+- Default `BASE_URL`: `http://dev.test/altcontext-marketing-monorepo/`.
+- In CI, if Apache is unavailable, script may run a temporary static server against `frontend/dist/`.
+
+### Async loading patterns
 ```html
 <link rel="stylesheet" href="/assets/site.css" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="/assets/site.css"></noscript>
 ```
 
-**Pattern 2: split base vs desktop**
+or
+
 ```html
 <link rel="stylesheet" href="/assets/base.css">
 <link rel="stylesheet" href="/assets/desktop.css" media="(min-width: 1024px)">
 ```
 
-### IMPORTANT: base-path correctness (must not break when shipping `dist/`)
-If the site is served under a subpath (like `/altcontext-marketing/`), then **root-relative asset URLs** like `/assets/site.css` will resolve to the domain root and break.
+### Base-path correctness
+If deployed under a subpath, do not rely on root-relative URLs unless configured for that subpath.
 
-To ensure the contents of `dist/` can be shipped without manual edits:
-
-**Standardize on ONE of the following:**
-
-**Option A (recommended): `<base href>` + base-relative asset paths**
-- Each HTML page includes:
+Preferred option:
 ```html
 <base href="%%BASE_HREF%%">
 <link rel="stylesheet" href="assets/site.css">
 ```
-- Build step replaces `%%BASE_HREF%%` with the correct base for the environment:
-  - local: `/altcontext-marketing/`
-  - production: `/` (or `/altcontext-marketing/` if you deploy under a subpath)
 
-**Option B: always prefix asset URLs with a build-time `PUBLIC_BASE`**
-- Generate `<link href="/{PUBLIC_BASE}/assets/site.css">` at build time.
+Build should replace `%%BASE_HREF%%` per environment.
 
-Agents MUST NOT introduce ad-hoc relative URLs that work only on the homepage.
-
-### Force-include rules
-Automated extractors often miss:
+### Force-include critical rules
+Extractors may miss:
 - `:focus-visible` and skip links
-- `@font-face` (if used)
-- dark-mode tokens  
-Maintain a **force-include snippet** injected into every page’s critical CSS.
+- `@font-face` used above the fold
+- theme token declarations needed for first paint
+
+Maintain a force-include snippet for these.
 
 ---
 
-## 6) CSS authoring patterns (SCSS + mobile-first)
+<a id="frontend-authoring-rules"></a>
+## 7. Frontend Authoring Rules
 
-### Suggested structure
-- `styles/_tokens.scss` — design tokens (spacing, colors, typography scale)
-- `styles/_base.scss` — minimal reset + body defaults
-- `styles/_layout.scss` — header/nav/hero layout primitives
-- `styles/_components.scss` — minimal UI pieces
-- `styles/_utilities.scss` — tiny helpers (sr-only, flow spacing)
-- `styles/site.scss` — single entrypoint
+### SCSS organization (`frontend/styles/`)
+- `_tokens.scss`: design tokens
+- `_base.scss`: reset + body defaults
+- `_layout.scss`: structural layout primitives
+- `_components.scss`: UI components
+- `_utilities.scss`: focused utility helpers
+- `site.scss`: single entrypoint
 
-### Mobile-first rule
-- Base styles assume narrow viewport.
-- Add enhancements with:
-```scss
-@media (min-width: 48rem) { /* ... */ }
-@media (min-width: 64rem) { /* ... */ }
-```
+### Mobile-first rules
+- Base styles target narrow viewports first.
+- Use `@media (min-width: ...)` for wider breakpoints.
+- Avoid deep selector nesting and long chains.
 
-### Avoid expensive CSS patterns
-- Avoid giant frameworks in first pass.
-- Avoid deep nesting and long selector chains.
-- Prefer CSS variables for theme toggles; avoid duplicating whole rule blocks.
+### Font rules
+- Prefer system font stack first.
+- If custom fonts are used:
+  - WOFF2 only
+  - `font-display: swap`
+  - preload only one above-the-fold face
 
-### Optional: below-the-fold rendering optimization
-Use `content-visibility: auto` on large below-fold sections; add `contain-intrinsic-size` to reduce layout thrash.
-
----
-
-## 7) Fonts (don’t let fonts block paint)
-
-### Default recommendation
-- Use a **system font stack** initially (fastest).
-
-### If using custom fonts
-- WOFF2 only; subset if possible.
-- `font-display: swap`.
-- Preload only the single font needed for the initial viewport.
+### Image and icon rules
+- Always set `width`/`height` or `aspect-ratio`.
+- Use AVIF/WebP where practical.
+- Lazy-load below-the-fold media with `loading="lazy"` and `decoding="async"`.
+- Inline only truly critical SVG icons.
 
 ---
 
-## 8) Images & icons (reduce bytes, prevent CLS)
-
-- Inline critical SVG icons only (logo, small icons).
-- Always set `width`/`height` (or CSS `aspect-ratio`) on images.
-- Use AVIF/WebP for large imagery.
-- Lazy-load below-fold:
-```html
-<img loading="lazy" decoding="async" ...>
-```
-
----
-
-## 9) JavaScript rules (keep it off the critical path)
+<a id="runtime-javascript-rules"></a>
+## 8. Runtime JavaScript Rules
 
 ### Default stance
 - No JS required for first paint.
 
-### If JS is needed
-- Always `defer`.
-- Progressive enhancement only.
-- No third-party JS before paint.
+### If JS is introduced
+- Load with `defer`.
+- Keep it progressive enhancement only.
+- No third-party script before first paint.
+- Use arrow functions for JS/TS function definitions unless `this` binding requires `function`.
 
-Example:
-```html
-<script src="/assets/site.js" defer></script>
-```
+### Approved lightweight patterns
+- Module: encapsulate state and reduce globals.
+- State: explicit UI states for forms and async flows.
+- Facade: wrap browser/network APIs behind stable helpers.
+- Command: queue telemetry or retryable actions cleanly.
+- Observer (tiny/local only): decouple small UI interactions when needed.
 
----
-
-## 10) PHP patterns (allowed at runtime, not required for FCP)
-
-Use PHP only for:
-- Email capture POST handler (no-JS form)
-- Simple proxy endpoints (e.g., to an email provider) if needed
-- WordPress demo area (separate path/subdomain)
-
-### Rules
-- PHP must not be required to render the marketing pages (static HTML is canonical).
-- PHP endpoints must return small responses; avoid blocking render resources.
-- Secure by default:
-  - validate inputs server-side,
-  - rate limit (even basic),
-  - use prepared statements for MySQL,
-  - avoid leaking stack traces.
+### Runtime limits
+- Avoid framework-style runtime architecture.
+- Prefer composition over inheritance.
+- If an abstraction adds more complexity than it removes, do not use it.
 
 ---
 
-## 11) Local development on macOS Apache (dev.test)
+<a id="backend-service-rules"></a>
+## 9. Backend Service Rules
 
-### Local URL + mapping (confirmed)
-- Apache vhost `dev.test` has `DocumentRoot "/Users/daniel/Development"`.
-- Project path is: `/Users/daniel/Development/altcontext-marketing/`
-- Site URL is: `http://dev.test/altcontext-marketing/`
+- Backend lives in `backend/` and supports email collection + marketing intelligence workflows.
+- Frontend pages must not depend on backend availability for first render.
+- HTML forms should still degrade gracefully when JS is absent.
 
-### Serving `dist/` without adding a new vhost entry
-Use a **project-local** `.htaccess` in the project root to rewrite requests into `dist/`:
+### API behavior
+- Keep response payloads small.
+- Validate all inputs server-side.
+- Apply rate limiting on write endpoints.
+- Return explicit non-2xx failures and avoid leaking internals.
 
-**File path:** `/Users/daniel/Development/altcontext-marketing/.htaccess` (repo root)
+### Integration behavior
+- Frontend telemetry and submit events must be non-blocking.
+- Do not introduce blocking scripts in `<head>` for analytics.
+
+---
+
+<a id="local-development-macos-apache"></a>
+## 10. Local Development (macOS Apache)
+
+### Confirmed local path and URL
+- Monorepo: `/Users/daniel/Development/altcontext-marketing-monorepo/`
+- Frontend URL: `http://dev.test/altcontext-marketing-monorepo/`
+
+### `.htaccess` rewrite for serving `frontend/dist/`
+File: `/Users/daniel/Development/altcontext-marketing-monorepo/.htaccess`
 
 ```apacheconf
 RewriteEngine On
 
-# Don't rewrite requests that are already going to /dist/
-RewriteRule ^dist/ - [L]
+RewriteRule ^frontend/dist/ - [L]
 
-# If a real file/dir exists at project root, serve it as-is (optional)
 RewriteCond %{REQUEST_FILENAME} -f [OR]
 RewriteCond %{REQUEST_FILENAME} -d
 RewriteRule ^ - [L]
 
-# Otherwise, serve everything out of dist/
-RewriteRule ^$ dist/ [L]
-RewriteRule ^(.+)$ dist/$1 [L]
+RewriteRule ^$ frontend/dist/ [L]
+RewriteRule ^(.+)$ frontend/dist/$1 [L]
 ```
 
-### Git hygiene for `.htaccess`
-- `.htaccess` is **local dev convenience** and SHOULD be in `.gitignore`.
-- Commit a template instead, e.g. `./.htaccess.example`, and document: “copy to `.htaccess` for local Apache”.
-
-### Asset-path rule (must not break under subpaths)
-Avoid plain relative paths like `assets/site.css` unless you also have a `<base href>` (see §5). Without `<base>`, nested pages like `/about/` will resolve assets as `/altcontext-marketing/about/assets/...` and break.
+### Git hygiene
+- `.htaccess` should be gitignored as local-only convenience.
+- Keep a committed template at `./.htaccess.example`.
 
 ---
 
-## 12) Verification (required before merging perf changes)
+<a id="python-standards-frontendoffline-scripts"></a>
+## 11. Python Standards (`frontend/offline-scripts/`)
 
-### Required checks
-- Lighthouse (mobile profile) on:
-  - Home
-  - A representative content page
-  - Email capture page
+> [!IMPORTANT]
+> Use `pathlib.Path`, strict typing, deterministic file ordering, and explicit error handling. Keep computation pure and keep I/O at entrypoints.
 
-### Regression gates
-Fail the build if:
-- Critical CSS exceeds budget,
-- Render-blocking CSS/JS is reintroduced,
-- New third-party scripts load before interaction.
-
----
-
-## 13) Repo structure (confirmed) + integration notes
-
-### Canonical repo structure
-```
-./package.json
-./tsconfig.tools.json
-./.gitignore
-./.htaccess              # local only (gitignored)
-./.htaccess.example      # committed template (recommended)
-
-./build/                 # TS tooling only (not deployed)
-  critcss.ts
-  copy.ts
-  audit.ts               # optional
-
-./styles/                # SCSS sources
-  site.scss
-  _tokens.scss
-  _base.scss
-  _layout.scss
-  _components.scss
-  _utilities.scss
-
-./src/                   # HTML templates/pages (or source pages)
-./public/                # static assets copied as-is (images, robots.txt, etc.)
-
-./dist/                  # deploy artifact (upload the CONTENTS of this folder)
-  index.html
-  about/index.html
-  assets/site.css
-  assets/...
-```
-
-### Tooling references
-- Shell tools available: `agentic/available-tools.md`
-- Shell scripts live in: `offline-scripts/`
-
-Suggested scripts (names only; implement as needed):
-- `offline-scripts/build.sh` — runs `npm run build`
-- `offline-scripts/serve-apache.sh` — helper for local Apache (if needed)
-- `offline-scripts/critcss.sh` — runs `npm run build:critcss`
-- `offline-scripts/audit.sh` — Lighthouse + size budget checks
+### Required rules
+- All functions typed; no implicit `Any` in public helpers.
+- Enforce `mypy --strict` (or equivalent strict pyright profile).
+- Enforce Ruff formatting and linting.
+- No bare `except`.
+- Use `encoding="utf-8"` for text I/O.
+- Sort all filesystem iteration before deterministic output.
+- Use constants for landmark indices and magic values.
+- Keep scripts single-purpose and split oversized files.
 
 ---
 
-## 14) Agent rules of engagement (do/don’t)
+<a id="typescript-standards-build-tooling"></a>
+## 12. TypeScript Standards (Build Tooling)
 
-### DO
-- Prefer static HTML + minimal CSS.
-- Inline critical CSS; async-load the rest.
-- Keep base styles mobile-first.
-- Use PHP only where it adds clear value (forms/proxy) and keep it off the critical path.
-- Measure regressions.
+> [!IMPORTANT]
+> TypeScript tooling must be strict, deterministic, ESM-consistent, and quiet by default. External input must be validated at boundaries.
 
-### DON’T
-- Add a framework “because it’s convenient”.
-- Add large CSS frameworks.
-- Add third-party scripts to `<head>` without measured justification.
-- Let critical CSS grow to include below-the-fold styling.
+### Required rules
+- `npm --prefix frontend run typecheck` must pass.
+- Avoid `any` without explicit justification.
+- Validate all untrusted input (disk, env vars, network) before typing.
+- No blind casts on untrusted data.
+- Prefer explicit Node imports (for example, `node:fs`, `node:path`).
+- Keep `frontend/build/*.ts` as side-effect boundaries.
+- No floating promises.
+- Use `process.exitCode = 1` on failures in script entrypoints.
+- Enforce ESLint rules for unused code, promise handling, and consistent type imports.
+- Use arrow functions for JS/TS function definitions unless `this` binding requires `function`.
+
+---
+
+<a id="verification-gates"></a>
+## 13. Verification Gates
+
+### Build and quality gates
+- `npm --prefix frontend run build`
+- `npm --prefix frontend run build:full`
+- `npm --prefix frontend run typecheck`
+- `npm --prefix frontend run lint`
+- `npm --prefix frontend run stylelint`
+- `npm --prefix frontend run format`
+
+### Performance gates
+- Run Lighthouse mobile profile on:
+  - home page
+  - representative content page
+  - email capture page
+- Fail changes that:
+  - exceed critical CSS budget
+  - reintroduce render-blocking CSS/JS
+  - load third-party scripts before interaction
+
+---
+
+<a id="agent-rules-of-engagement"></a>
+## 14. Agent Rules of Engagement
+
+### Do
+- Prioritize static HTML and small CSS.
+- Keep critical CSS minimal and async-load the rest.
+- Keep builds deterministic and fast by default.
+- Use recrop modes only when required.
+- Keep backend integration off the paint-critical path.
+
+### Do not
+- Add a framework solely for convenience.
+- Add large CSS frameworks to first-pass pages.
+- Add third-party scripts in `<head>` without measured justification.
+- Allow critical CSS to grow with below-the-fold styling.

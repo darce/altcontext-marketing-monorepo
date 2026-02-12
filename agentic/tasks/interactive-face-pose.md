@@ -86,23 +86,25 @@ const metadata = await fetch('metadata.json').then(r => r.json());
 - [ ] Create `styles/site.scss` entrypoint.
 - [ ] Create `src/index.html` skeleton.
 
-## Phase 1: Metadata Extraction & Mocks
-- [ ] Create `build/extract-metadata.ts` for extraction and basic injection.
-- [ ] Create `offline-scripts/generate-mocks.ts` to create a controlled test set.
-- [ ] Extract `Iptc4xmpExt:RegionBoundary` and `acx` pose data.
+## Phase 1: MediaPipe Analysis & XMP Injection
+- [ ] Create `offline-scripts/analyze-faces.py` using MediaPipe to extract Yaw, Pitch, Roll, and Region.
+- [ ] Implement XMP injection logic in `offline-scripts/analyze-faces.py` to persist data into source images in `input-images/celebs`.
+- [ ] Run analysis on all source images.
+- [ ] Update `build/extract-metadata.ts` to verify it reads the newly injected data.
 - [ ] Write consolidated `public/metadata.json`.
 - [ ] Add `build:metadata` to `package.json`.
 
 ## Phase 2: UI & Interaction
-- [ ] Create `styles/face-pose.scss` with face-alignment utility classes.
-- [ ] Create `src/face-pose.js` for interactivity and pose mapping.
-- [ ] Implement image swapping logic (nearest-neighbor pose search).
-- [ ] Implement CSS-based centering and scaling based on metadata.
+- [x] Create `styles/face-pose.scss`.
+- [x] Create `src/face-pose.js`.
+- [x] Create `src/index.html`.
+- [ ] Implement robust face alignment logic (CSS).
+- [ ] Implement mouse-to-pose mapping and image swapping.
 
-## Phase 3: Verification
-- [ ] Run `npm run build` and verify `dist/` output.
-- [ ] Verify FCP is within 14KB budget.
-- [ ] Verify mouse interactivity on `dev.test`.
+## Phase 4: Normalization & Refinement
+- [ ] Adjust `offline-scripts/analyze-faces.py` to include padding in the bounding box for better framing.
+- [ ] Update `src/face-pose.js` to strictly normalize face size relative to the container.
+- [ ] Verify consistent sizing across different face shapes and framings.
 
 ## Success Criteria
 
