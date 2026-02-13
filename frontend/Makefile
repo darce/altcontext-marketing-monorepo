@@ -199,10 +199,12 @@ ci: install  ## Full CI pipeline: build + typecheck + lint + stylelint + format
 
 deploy: build verify-dist  ## Fast deploy: no data pipeline recrop
 	@echo "== Deploying frontend/dist to GitHub Pages =="
-	git add -f $(DIST)/
-	git stash push -m "deploy-stash" -- $(DIST)/
-	git checkout gh-pages 2>/dev/null || git checkout -b gh-pages
-	git stash pop
+	$(eval DEPLOY_TMP := $(shell mktemp -d))
+	cp -R $(DIST)/ $(DEPLOY_TMP)/dist
+	git checkout gh-pages
+	rm -rf $(DIST)
+	cp -R $(DEPLOY_TMP)/dist $(DIST)
+	rm -rf $(DEPLOY_TMP)
 	git add $(DIST)/
 	git commit -m "deploy: $$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
 	git push origin gh-pages
@@ -211,10 +213,12 @@ deploy: build verify-dist  ## Fast deploy: no data pipeline recrop
 
 deploy-full: build-full verify-dist  ## Full deploy: data pipeline + assets
 	@echo "== Deploying frontend/dist to GitHub Pages =="
-	git add -f $(DIST)/
-	git stash push -m "deploy-stash" -- $(DIST)/
-	git checkout gh-pages 2>/dev/null || git checkout -b gh-pages
-	git stash pop
+	$(eval DEPLOY_TMP := $(shell mktemp -d))
+	cp -R $(DIST)/ $(DEPLOY_TMP)/dist
+	git checkout gh-pages
+	rm -rf $(DIST)
+	cp -R $(DEPLOY_TMP)/dist $(DIST)
+	rm -rf $(DEPLOY_TMP)
 	git add $(DIST)/
 	git commit -m "deploy: $$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
 	git push origin gh-pages
