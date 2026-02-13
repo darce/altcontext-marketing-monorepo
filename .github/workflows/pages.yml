@@ -26,23 +26,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
         with:
           enablement: true
 
-      - name: Install frontend dependencies
-        run: npm ci --prefix frontend
-
-      - name: Build frontend assets
-        run: npm run build --prefix frontend
+      - name: Validate committed dist integrity
+        run: node frontend/build/verify-dist.mjs
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4

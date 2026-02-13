@@ -8,9 +8,10 @@ __pycache__/
 # Local/source image corpus (keep local, do not version)
 frontend/input-images/
 frontend/offline-scripts/processed-images
+frontend/build/generated/
+frontend/public/unusable-images-report.json
 
 # macOS Finder artifacts
 .DS_Store
 **/.DS_Store
-
 .htaccess

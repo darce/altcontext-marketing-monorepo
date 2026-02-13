@@ -80,6 +80,15 @@ const copyRecursive = (src: string, dest: string): boolean => {
 };
 
 const copyPublicNonImageAssets = (): void => {
+  if (!fs.existsSync(PUBLIC_DIR)) {
+    if (VERBOSE) {
+      console.log(
+        `📁 Skipped optional public asset copy: ${PUBLIC_DIR} does not exist.`,
+      );
+    }
+    return;
+  }
+
   const entries = fs.readdirSync(PUBLIC_DIR).sort();
   const excludedPublicEntries = new Set([
     "input-images",
