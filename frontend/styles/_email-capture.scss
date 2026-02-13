@@ -1,0 +1,127 @@
+// styles/_email-capture.scss
+@use "tokens";
+
+.email-capture-section {
+  margin-top: tokens.$space-md * 3;
+  padding: tokens.$space-md * 2;
+  text-align: center;
+}
+
+.email-capture {
+  display: flex;
+  flex-direction: column;
+  gap: tokens.$space-md;
+  max-width: 28rem;
+  margin: 0 auto;
+}
+
+.email-capture-label {
+  font-size: 1rem;
+  font-weight: 500;
+  color: tokens.$color-text;
+}
+
+.email-capture-row {
+  display: flex;
+  gap: tokens.$space-sm;
+  flex-wrap: wrap;
+
+  @media (width <= 30rem) {
+    flex-direction: column;
+  }
+}
+
+.email-capture-input {
+  flex: 1;
+  min-width: 10rem;
+  padding: 0.75rem tokens.$space-md;
+  border: 1px solid tokens.$color-border;
+  border-radius: tokens.$radius-sm;
+  background-color: tokens.$color-surface-panel;
+  color: tokens.$color-text;
+  font-family: tokens.$font-body;
+  font-size: 1rem;
+
+  &::placeholder {
+    color: tokens.$color-text-muted;
+  }
+
+  &:focus {
+    outline: none;
+    border-color: tokens.$color-duotone-highlight;
+    box-shadow: 0 0 0 2px rgb(224 99 193 / 20%);
+  }
+
+  @media (width <= 30rem) {
+    width: 100%;
+  }
+}
+
+.email-capture-button {
+  padding: 0.75rem tokens.$space-md * 1.5;
+  border: 1px solid tokens.$color-duotone-highlight;
+  border-radius: tokens.$radius-sm;
+  background-color: transparent;
+  color: tokens.$color-duotone-highlight;
+  font-family: tokens.$font-body;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease;
+
+  &:hover {
+    background-color: rgb(224 99 193 / 15%);
+  }
+
+  &:active {
+    background-color: rgb(224 99 193 / 25%);
+  }
+
+  &:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px rgb(224 99 193 / 40%);
+  }
+
+  @media (width <= 30rem) {
+    width: 100%;
+  }
+}
+
+.email-capture-consent {
+  margin: 0;
+  font-size: 0.875rem;
+  color: tokens.$color-text-muted;
+  line-height: 1.5;
+
+  a {
+    color: tokens.$color-duotone-highlight;
+    text-decoration: none;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
+}
+
+.email-capture-success {
+  padding: tokens.$space-md;
+  border-radius: tokens.$radius-sm;
+  background-color: rgb(17 131 0 / 20%);
+  color: #5db820;
+  font-size: 1rem;
+  text-align: center;
+  margin: 0;
+}
+
+.email-capture-error {
+  padding: tokens.$space-md;
+  border-radius: tokens.$radius-sm;
+  background-color: rgb(200 0 0 / 20%);
+  color: #f55;
+  font-size: 0.875rem;
+  text-align: center;
+  margin: 0;
+}

@@ -6,7 +6,7 @@
   "scripts": {
     "clean": "node build/clean-dist.mjs",
     "build:assets:copy": "tsx build/copy.ts",
-    "build:assets:scripts": "esbuild src/assets/face-pose/index.ts --bundle --format=iife --target=es2022 --outfile=dist/assets/face-pose.js",
+    "build:assets:scripts": "esbuild src/assets/face-pose/index.ts --bundle --format=iife --target=es2022 --outfile=dist/assets/face-pose.js && esbuild src/assets/telemetry.ts --bundle --format=iife --target=es2022 --define:BACKEND_URL='\"\"' --outfile=dist/assets/telemetry.js",
     "build:assets:css": "mkdir -p dist/assets && sass styles/site.scss dist/assets/site.css --style=compressed --no-source-map",
     "build:assets:postcss": "postcss dist/assets/site.css --use autoprefixer --use cssnano -o dist/assets/site.css",
     "build:assets:compress": "tsx build/compress.ts",

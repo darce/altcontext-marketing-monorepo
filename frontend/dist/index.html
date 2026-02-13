@@ -34,6 +34,7 @@
     />
     <noscript><link rel="stylesheet" href="assets/site.css" /></noscript>
     <script src="assets/face-pose.js" defer></script>
+    <script src="assets/telemetry.js" defer></script>
   </head>
   <body>
     <main class="container">
@@ -59,5 +60,51 @@ Loading metadata...</pre
         </div>
       </div>
     </main>
+
+    <section class="email-capture-section">
+      <form
+        id="email-form"
+        method="POST"
+        action="/v1/leads/capture"
+        class="email-capture"
+      >
+        <label for="email-input" class="email-capture-label"
+          >Get early access:</label
+        >
+        <div class="email-capture-row">
+          <input
+            id="email-input"
+            type="email"
+            name="email"
+            placeholder="you@example.com"
+            required
+            autocomplete="email"
+            class="email-capture-input"
+          />
+          <button type="submit" class="email-capture-button">Sign up</button>
+        </div>
+        <!-- Honeypot — hidden from real users -->
+        <input
+          type="text"
+          name="honeypot"
+          tabindex="-1"
+          autocomplete="off"
+          aria-hidden="true"
+          style="
+            position: absolute;
+            left: -9999px;
+            width: 1px;
+            height: 1px;
+            opacity: 0;
+            pointer-events: none;
+          "
+        />
+        <input type="hidden" name="path" value="/" />
+        <p class="email-capture-consent">
+          We'll email you product updates. <a href="#">Unsubscribe anytime.</a>
+          <a href="#">Privacy policy.</a>
+        </p>
+      </form>
+    </section>
   </body>
 </html>
