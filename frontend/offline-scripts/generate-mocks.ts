@@ -1,9 +1,9 @@
 // offline-scripts/generate-mocks.ts
-import fs from 'node:fs';
-import path from 'node:path';
+import fs from "node:fs";
+import path from "node:path";
 
-const SOURCE_DIR = './input-images/celebs';
-const MOCK_DIR = './input-images/mocks';
+const SOURCE_DIR = "./input-images/celebs";
+const MOCK_DIR = "./input-images/mocks";
 
 const XMP_TEMPLATE = (name: string, yaw: number, pitch: number) => `
 <x:xmpmeta xmlns:x="adobe:ns:meta/">
@@ -40,19 +40,19 @@ const XMP_TEMPLATE = (name: string, yaw: number, pitch: number) => `
 
 function injectXmp(inputPath: string, outputPath: string, xmp: string) {
   const buffer = fs.readFileSync(inputPath);
-  const xmpHeader = Buffer.from('http://ns.adobe.com/xap/1.0/\0');
-  const xmpContent = Buffer.from(xmp, 'utf8');
+  const xmpHeader = Buffer.from("http://ns.adobe.com/xap/1.0/\0");
+  const xmpContent = Buffer.from(xmp, "utf8");
 
   // APP1 header (0xFFE1) + Length (2 bytes)
   const segmentLength = 2 + xmpHeader.length + xmpContent.length;
   const app1Header = Buffer.alloc(4);
-  app1Header[0] = 0xFF;
-  app1Header[1] = 0xE1;
+  app1Header[0] = 0xff;
+  app1Header[1] = 0xe1;
   app1Header.writeUInt16BE(segmentLength, 2);
 
   // Find insertion point (after SOI 0xFFD8)
-  if (buffer[0] !== 0xFF || buffer[1] !== 0xD8) {
-    // Not a standard JPEG start, just append or prepend? 
+  if (buffer[0] !== 0xff || buffer[1] !== 0xd8) {
+    // Not a standard JPEG start, just append or prepend?
     // For simplicity, let's just create a new buffer if it's not JPEG.
     // But most of our files are JPG.
   }
@@ -62,7 +62,7 @@ function injectXmp(inputPath: string, outputPath: string, xmp: string) {
     app1Header,
     xmpHeader,
     xmpContent,
-    buffer.slice(2)
+    buffer.slice(2),
   ]);
 
   fs.writeFileSync(outputPath, newBuffer);
@@ -71,7 +71,10 @@ function injectXmp(inputPath: string, outputPath: string, xmp: string) {
 function generateMocks() {
   if (!fs.existsSync(MOCK_DIR)) fs.mkdirSync(MOCK_DIR, { recursive: true });
 
-  const sourceFiles = fs.readdirSync(SOURCE_DIR).filter(f => f.endsWith('.jpg')).slice(0, 25);
+  const sourceFiles = fs
+    .readdirSync(SOURCE_DIR)
+    .filter((f) => f.endsWith(".jpg"))
+    .slice(0, 25);
 
   console.log(`🔨 Generating ${sourceFiles.length} mock images...`);
 
@@ -84,7 +87,7 @@ function generateMocks() {
       const yaw = y * 30; // -60, -30, 0, 30, 60
       const pitch = py * 20; // -40, -20, 0, 20, 40
 
-      const xmp = XMP_TEMPLATE('Daniel', yaw, pitch);
+      const xmp = XMP_TEMPLATE("Daniel", yaw, pitch);
       const inputPath = path.join(SOURCE_DIR, file);
       const outputPath = path.join(MOCK_DIR, `mock_${i}.jpg`);
 
