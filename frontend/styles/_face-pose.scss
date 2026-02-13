@@ -19,8 +19,9 @@
   display: flex;
   flex-direction: column;
 
-  @media (width <=30rem) {
-    display: none;
+  // stylelint-disable-next-line media-feature-range-notation
+  @media (max-width: 30rem) {
+    display: none !important;
   }
 }
 
@@ -65,28 +66,30 @@
   // clip-path creates a hard clip that survives layer promotion.
   clip-path: circle(50%);
 
-  @media (width <=30rem) {
+  // stylelint-disable-next-line media-feature-range-notation
+  @media (max-width: 30rem) {
     position: fixed;
     inset: 0;
-    width: 100% !important;
-    height: 100% !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    height: 100dvh !important;
+    aspect-ratio: auto;
     border-radius: 0;
     clip-path: none;
     z-index: 0;
     pointer-events: none;
     border: none;
     box-shadow: none;
+    margin: 0;
 
     &::before {
       content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(
-        to bottom,
-        rgb(0 0 0 / 40%) 0%,
-        rgb(0 0 0 / 20%) 50%,
-        rgb(0 0 0 / 60%) 100%
-      );
+      background: linear-gradient(to bottom,
+          rgb(0 0 0 / 40%) 0%,
+          rgb(0 0 0 / 20%) 50%,
+          rgb(0 0 0 / 60%) 100%);
       z-index: 2;
       pointer-events: none;
     }

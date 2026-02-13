@@ -25,7 +25,8 @@ h1 {
   margin: 0 0 tokens.$space-sm;
   line-height: 1.1;
 
-  @media (width <=30rem) {
+  // stylelint-disable-next-line media-feature-range-notation
+  @media (max-width: 30rem) {
     font-size: 3rem;
   }
 }
@@ -37,7 +38,8 @@ h2,
   font-weight: 100;
   margin: 0 0 tokens.$space-sm;
 
-  @media (width <=30rem) {
+  // stylelint-disable-next-line media-feature-range-notation
+  @media (max-width: 30rem) {
     font-size: 1.25rem;
   }
 }
