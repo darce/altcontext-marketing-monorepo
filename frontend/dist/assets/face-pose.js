@@ -50,6 +50,13 @@
     edgeCompressionThreshold: 0.15,
     edgeCompressionOutput: 0.08
   };
+  var GYRO_CONFIG = {
+    betaOffset: 50,
+    minPoseDeltaToUpdate: 0.1,
+    gammaMaxAbs: 90,
+    interactionCoordinationThresholdMs: 500,
+    noEventTimeoutMs: 2e3
+  };
   var METADATA_ERROR_HINT = "Metadata is missing precomputed face transforms. Run `npm --prefix frontend run build:derivatives`.";
 
   // src/assets/face-pose/dom.ts
@@ -63,6 +70,7 @@
     const loader = document.getElementById(SELECTORS.loader);
     const metadataPanel = document.getElementById(SELECTORS.metadataPanel);
     const metadataTitle = document.getElementById(SELECTORS.metadataTitle);
+    const permissionOverlay = document.getElementById("pose-permission-overlay");
     const hasRequiredNodes = faceContainer instanceof HTMLElement && interactionSurface instanceof HTMLElement && image instanceof HTMLImageElement && loader instanceof HTMLElement;
     const setLoaderText = (text) => {
       if (!(loader instanceof HTMLElement)) {
@@ -130,7 +138,8 @@ roll: ${item.pose.roll}`;
       setImageTransform,
       setImageRendering,
       getContainerRect,
-      renderMetadata
+      renderMetadata,
+      getPermissionOverlay: () => permissionOverlay instanceof HTMLElement ? permissionOverlay : null
     };
   };
 
@@ -930,7 +939,10 @@ roll: ${item.pose.roll}`;
     lastPointerPose: null,
     lastPointerAtMs: 0,
     pointerVelocityDegPerMs: 0,
-    lastHintAtMs: 0
+    lastHintAtMs: 0,
+    lastInteractionAtMs: 0,
+    lastInteractionType: null,
+    isGyroActive: false
   });
   var toPoseFromPointer = (event, rect, poseBounds) => {
     const safeWidth = rect.width || 1;
@@ -1101,12 +1113,94 @@ roll: ${item.pose.roll}`;
         }
         state.lastPointerPose = pose;
         state.lastPointerAtMs = now;
+        state.lastInteractionAtMs = now;
+        state.lastInteractionType = "pointer";
         commandQueue.enqueue(pose.yaw, pose.pitch);
         scheduleCacheWarmHint(metadata, state, pose, now);
       });
     }
     const initialPose = pickInitialPose(metadata, poseBounds);
     commandQueue.enqueue(initialPose.yaw, initialPose.pitch);
+    const permissionOverlay = dom.getPermissionOverlay();
+    const hasOrientationSupport = typeof window !== "undefined" && "DeviceOrientationEvent" in window;
+    if (hasOrientationSupport && permissionOverlay) {
+      const DeviceOrientation = window.DeviceOrientationEvent;
+      const requiresPermission = typeof DeviceOrientation.requestPermission === "function";
+      let lastGyroPose = null;
+      let gyroEventCount = 0;
+      let gyroDetectionTimeout;
+      const onOrientation = (event) => {
+        const now = nowMs2();
+        if (state.lastInteractionType === "pointer" && now - state.lastInteractionAtMs < GYRO_CONFIG.interactionCoordinationThresholdMs) {
+          return;
+        }
+        const gamma = event.gamma ?? 0;
+        const beta = event.beta ?? 0;
+        const normalizedGamma = (clamp(gamma, -GYRO_CONFIG.gammaMaxAbs, GYRO_CONFIG.gammaMaxAbs) + GYRO_CONFIG.gammaMaxAbs) / (2 * GYRO_CONFIG.gammaMaxAbs);
+        const yaw = mapUnitToRange(
+          normalizedGamma,
+          poseBounds.minYaw,
+          poseBounds.maxYaw
+        );
+        const pitch = clamp(
+          beta - GYRO_CONFIG.betaOffset,
+          poseBounds.minPitch,
+          poseBounds.maxPitch
+        );
+        if (lastGyroPose) {
+          const yawDelta = Math.abs(yaw - lastGyroPose.yaw);
+          const pitchDelta = Math.abs(pitch - lastGyroPose.pitch);
+          if (yawDelta < GYRO_CONFIG.minPoseDeltaToUpdate && pitchDelta < GYRO_CONFIG.minPoseDeltaToUpdate) {
+            return;
+          }
+        }
+        gyroEventCount++;
+        if (gyroEventCount > 1) {
+          state.isGyroActive = true;
+          state.lastInteractionType = "gyro";
+          state.lastInteractionAtMs = now;
+          if (gyroDetectionTimeout !== void 0) {
+            clearTimeout(gyroDetectionTimeout);
+            gyroDetectionTimeout = void 0;
+          }
+          permissionOverlay.style.display = "none";
+        }
+        lastGyroPose = { yaw, pitch };
+        commandQueue.enqueue(yaw, pitch);
+      };
+      const enableMotion = async () => {
+        try {
+          if (requiresPermission) {
+            const response = await DeviceOrientation.requestPermission();
+            if (response !== "granted") {
+              return;
+            }
+          }
+          window.addEventListener("deviceorientation", onOrientation);
+          gyroDetectionTimeout = window.setTimeout(() => {
+            if (gyroEventCount < 2) {
+              permissionOverlay.style.display = "none";
+            }
+          }, GYRO_CONFIG.noEventTimeoutMs);
+        } catch (e) {
+          console.warn("DeviceOrientation permission failed", e);
+          permissionOverlay.style.display = "none";
+        }
+      };
+      if (requiresPermission) {
+        permissionOverlay.style.display = "flex";
+        permissionOverlay.addEventListener(
+          "click",
+          (e) => {
+            e.stopPropagation();
+            void enableMotion();
+          },
+          { once: true }
+        );
+      } else {
+        void enableMotion();
+      }
+    }
     if (preloadPlan.backgroundStages.length > 0) {
       const runBackgroundPreload = async () => {
         for (let stageIndex = 0; stageIndex < preloadPlan.backgroundStages.length; stageIndex += 1) {
