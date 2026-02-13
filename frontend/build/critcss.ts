@@ -1,11 +1,12 @@
-import { generate } from 'critical';
-import fs from 'node:fs';
-import process from 'node:process';
+import { generate } from "critical";
+import fs from "node:fs";
+import process from "node:process";
 
-const DIST_DIR = 'dist';
+const DIST_DIR = "dist";
 
 async function main() {
-  const verbose = process.argv.includes('--verbose') || process.env.BUILD_VERBOSE === '1';
+  const verbose =
+    process.argv.includes("--verbose") || process.env.BUILD_VERBOSE === "1";
 
   if (!fs.existsSync(DIST_DIR)) {
     console.error(`❌ Dist directory ${DIST_DIR} not found. Run build first.`);
@@ -14,8 +15,9 @@ async function main() {
   }
 
   // Rule: Deterministic Sorting
-  const htmlFiles = fs.readdirSync(DIST_DIR)
-    .filter(f => f.endsWith('.html'))
+  const htmlFiles = fs
+    .readdirSync(DIST_DIR)
+    .filter((f) => f.endsWith(".html"))
     .sort();
 
   for (const file of htmlFiles) {
@@ -29,7 +31,7 @@ async function main() {
         src: file, // Relative to base
         target: {
           html: file,
-          uncritical: 'assets/site.css',
+          uncritical: "assets/site.css",
         },
         inline: true,
         dimensions: [
@@ -46,12 +48,14 @@ async function main() {
     }
   }
 
-  if (process.env['CI']) {
-    console.warn('⚠️ Critical CSS extraction might fail in CI without a server.');
+  if (process.env["CI"]) {
+    console.warn(
+      "⚠️ Critical CSS extraction might fail in CI without a server.",
+    );
   }
 }
 
-main().catch(err => {
-  console.error('Fatal error during Critical CSS extraction:', err);
+main().catch((err) => {
+  console.error("Fatal error during Critical CSS extraction:", err);
   process.exitCode = 1;
 });

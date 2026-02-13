@@ -22,7 +22,10 @@ export const errorMessage = (error: unknown): string => {
   return String(error);
 };
 
-export const requireRecord = (value: unknown, fieldPath: string): JsonRecord => {
+export const requireRecord = (
+  value: unknown,
+  fieldPath: string,
+): JsonRecord => {
   if (!isJsonRecord(value)) {
     throw new Error(`${fieldPath} must be an object.`);
   }
@@ -106,7 +109,10 @@ export const readPose = (value: unknown, fieldPath: string): FacePose => {
   };
 };
 
-export const readFeatures = (value: unknown, fieldPath: string): SourceFeatures => {
+export const readFeatures = (
+  value: unknown,
+  fieldPath: string,
+): SourceFeatures => {
   const features = requireRecord(value, fieldPath);
   const eyes = requireRecord(features.eyes, `${fieldPath}.eyes`);
   const mouth = requireRecord(features.mouth, `${fieldPath}.mouth`);
@@ -132,7 +138,10 @@ export const readFeatures = (value: unknown, fieldPath: string): SourceFeatures 
   };
 };
 
-export const normalizeRelativePath = (value: string, fieldPath: string): string => {
+export const normalizeRelativePath = (
+  value: string,
+  fieldPath: string,
+): string => {
   const normalized = path.posix.normalize(value.replace(/\\/g, "/").trim());
   if (normalized.length === 0 || normalized === ".") {
     throw new Error(`${fieldPath} must be a non-empty relative path.`);
@@ -225,7 +234,9 @@ export const compareStrings = (a: string, b: string): number => {
   return a < b ? -1 : 1;
 };
 
-export const sortSourceItems = (items: SourceMetadataItem[]): SourceMetadataItem[] => {
+export const sortSourceItems = (
+  items: SourceMetadataItem[],
+): SourceMetadataItem[] => {
   return [...items].sort((a, b) => {
     const fileCompare = compareStrings(a.file, b.file);
     if (fileCompare !== 0) {
@@ -239,6 +250,8 @@ export const writeRuntimeMetadata = (
   outputFile: string,
   runtimeItems: RuntimeMetadataItem[],
 ): void => {
-  const sorted = [...runtimeItems].sort((a, b) => compareStrings(a.file, b.file));
+  const sorted = [...runtimeItems].sort((a, b) =>
+    compareStrings(a.file, b.file),
+  );
   fs.writeFileSync(outputFile, JSON.stringify(sorted), { encoding: "utf8" });
 };

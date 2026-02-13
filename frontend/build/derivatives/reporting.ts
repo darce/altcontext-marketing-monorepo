@@ -8,7 +8,10 @@ import type {
   QualityRejection,
   RecropMode,
 } from "./types";
-import { POSE_COVERAGE_CELL_STEP, POSE_COVERAGE_MIN_ITEMS_PER_CELL } from "./pose-bounds";
+import {
+  POSE_COVERAGE_CELL_STEP,
+  POSE_COVERAGE_MIN_ITEMS_PER_CELL,
+} from "./pose-bounds";
 import { INPUT_DIR, OUTPUT_IMAGE_DIR, ensureDir } from "./workflow";
 
 export const logPoseCoverageGaps = (

@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import process from "node:process";
-import puppeteer from "puppeteer";
+import puppeteer from "puppeteer-core";
 
 import {
   ALIGNMENT_TARGET_EYE_X_RATIO,
@@ -14,7 +14,12 @@ import {
   roundTo,
   toAlignmentScore,
 } from "./crop";
-import type { BrowserRenderer, CropBox, Point, RuntimeTransform } from "./types";
+import type {
+  BrowserRenderer,
+  CropBox,
+  Point,
+  RuntimeTransform,
+} from "./types";
 
 const DERIVATIVE_WEBP_QUALITY = 42;
 export const CRITICAL_EYE_DERIVATIVE_WEBP_QUALITY = 50;
@@ -88,7 +93,7 @@ export const renderCroppedDerivative = (
   sourcePath: string,
   outputPath: string,
   crop: CropBox,
-  flopSource: boolean = false,
+  flopSource = false,
 ): void => {
   ensureDir(path.dirname(outputPath));
   const args: string[] = [sourcePath, "-auto-orient"];
@@ -108,11 +113,7 @@ export const renderCroppedDerivative = (
     "-strip",
     outputPath,
   );
-  execFileSync(
-    "magick",
-    args,
-    { stdio: "pipe" },
-  );
+  execFileSync("magick", args, { stdio: "pipe" });
 };
 
 /** Convert normalized transform fields into an SVG/CSS matrix() string. */
@@ -157,7 +158,9 @@ export const encodeDerivativeWebp = (
   );
 };
 
-const getOutputImageSize = (outputPath: string): { width: number; height: number } => {
+const getOutputImageSize = (
+  outputPath: string,
+): { width: number; height: number } => {
   const raw = execFileSync(
     "magick",
     [outputPath, "-ping", "-format", "%w %h", "info:"],
@@ -259,9 +262,8 @@ export const createBrowserRenderer = async (): Promise<BrowserRenderer> => {
         outputPath: string;
         transformCss: string;
       }) => {
-        const renderRaw = (
-          globalThis as unknown as { __acxRender?: unknown }
-        ).__acxRender;
+        const renderRaw = (globalThis as unknown as { __acxRender?: unknown })
+          .__acxRender;
         if (typeof renderRaw !== "function") {
           throw new Error("Canvas renderer is unavailable in headless page.");
         }
@@ -294,7 +296,7 @@ export const bakeAlignedDerivative = async (
   crop: CropBox,
   alignmentTransform: RuntimeTransform,
   webpQuality?: number,
-  flopSource: boolean = false,
+  flopSource = false,
 ): Promise<void> => {
   const tempBasePngPath = `${outputPath}.base.png`;
   const tempAlignedPngPath = `${outputPath}.aligned.png`;

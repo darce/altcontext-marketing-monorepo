@@ -47,7 +47,9 @@ const titleCaseWord = (word: string): string => {
 };
 
 /** Infer a display name from a filename like first_last_12.jpg. */
-export const inferPersonName = (relativeInputPath: string): string | undefined => {
+export const inferPersonName = (
+  relativeInputPath: string,
+): string | undefined => {
   const baseName = path.basename(
     relativeInputPath,
     path.extname(relativeInputPath),
@@ -126,7 +128,9 @@ export const logSelection = (
       .slice(0, 8)
       .map((file) => path.basename(file))
       .join(", ");
-    console.log(`🧷 Sample files: ${sample}${imageFiles.length > 8 ? ", ..." : ""}`);
+    console.log(
+      `🧷 Sample files: ${sample}${imageFiles.length > 8 ? ", ..." : ""}`,
+    );
   }
 };
 
@@ -137,7 +141,10 @@ export const processImageFile = (
   state: ExtractionState,
 ): void => {
   const buffer = fs.readFileSync(filePath);
-  const relativeInputPath = path.relative(INPUT_DIR, filePath).split(path.sep).join("/");
+  const relativeInputPath = path
+    .relative(INPUT_DIR, filePath)
+    .split(path.sep)
+    .join("/");
   const xmpResult = extractXmp(buffer);
 
   if (!xmpResult.xmp) {
@@ -213,10 +220,13 @@ export const writeExtractionOutputs = (
     );
   }
 
-  const sortedMetadata: SourceMetadata[] = [...state.metadataList].sort((left, right) =>
-    left.file.localeCompare(right.file),
+  const sortedMetadata: SourceMetadata[] = [...state.metadataList].sort(
+    (left, right) => left.file.localeCompare(right.file),
   );
-  fs.writeFileSync(SOURCE_METADATA_FILE, JSON.stringify(sortedMetadata, null, 2));
+  fs.writeFileSync(
+    SOURCE_METADATA_FILE,
+    JSON.stringify(sortedMetadata, null, 2),
+  );
   console.log(
     `✅ Extracted metadata for ${sortedMetadata.length} images to ${SOURCE_METADATA_FILE}`,
   );

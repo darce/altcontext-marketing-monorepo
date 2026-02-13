@@ -32,13 +32,19 @@ const readJson = (filePath) => {
 
 const ensureRequiredPaths = () => {
   if (!fs.existsSync(INDEX_PATH)) {
-    fail(`Missing ${path.relative(process.cwd(), INDEX_PATH)}. Build and commit dist before deploy.`);
+    fail(
+      `Missing ${path.relative(process.cwd(), INDEX_PATH)}. Build and commit dist before deploy.`,
+    );
   }
   if (!fs.existsSync(METADATA_PATH)) {
-    fail(`Missing ${path.relative(process.cwd(), METADATA_PATH)}. Build and commit dist before deploy.`);
+    fail(
+      `Missing ${path.relative(process.cwd(), METADATA_PATH)}. Build and commit dist before deploy.`,
+    );
   }
   if (!fs.existsSync(ATLAS_DIR)) {
-    fail(`Missing ${path.relative(process.cwd(), ATLAS_DIR)}. Build and commit dist before deploy.`);
+    fail(
+      `Missing ${path.relative(process.cwd(), ATLAS_DIR)}. Build and commit dist before deploy.`,
+    );
   }
 };
 

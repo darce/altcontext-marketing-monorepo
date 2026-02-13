@@ -13,7 +13,10 @@ import {
   parseSourceMetadata,
   writeRuntimeMetadata,
 } from "./derivatives/metadata-io";
-import { derivePoseBoundsFromRuntime, writePoseBounds } from "./derivatives/pose-bounds";
+import {
+  derivePoseBoundsFromRuntime,
+  writePoseBounds,
+} from "./derivatives/pose-bounds";
 import { processSourceItems } from "./derivatives/processing";
 import {
   logOutcome,
@@ -52,7 +55,9 @@ const main = async (): Promise<void> => {
   }
 
   if (!fs.existsSync(SOURCE_METADATA_FILE)) {
-    console.error(`❌ ${SOURCE_METADATA_FILE} not found. Run build:metadata first.`);
+    console.error(
+      `❌ ${SOURCE_METADATA_FILE} not found. Run build:metadata first.`,
+    );
     process.exitCode = 1;
     return;
   }
@@ -74,7 +79,9 @@ const main = async (): Promise<void> => {
     options.verbose,
   );
   if (selectedItems.length === 0) {
-    console.error("❌ No source metadata entries selected after subset/limit filtering.");
+    console.error(
+      "❌ No source metadata entries selected after subset/limit filtering.",
+    );
     process.exitCode = 1;
     return;
   }

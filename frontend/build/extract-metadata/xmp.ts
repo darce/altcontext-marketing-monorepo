@@ -4,7 +4,10 @@ import type { ParsedXmpResult, Point } from "./types";
 /** Extract the raw XMP block from binary image data. */
 export const extractXmp = (
   buffer: Buffer,
-): { xmp: string | null; reason?: "no_xmp_header" | "no_xmp_start" | "no_xmp_end" } => {
+): {
+  xmp: string | null;
+  reason?: "no_xmp_header" | "no_xmp_start" | "no_xmp_end";
+} => {
   const offset = buffer.indexOf(XMP_HEADER);
   if (offset === -1) {
     return { xmp: null, reason: "no_xmp_header" };
@@ -95,7 +98,9 @@ export const parseXmp = (xmp: string): ParsedXmpResult => {
   const interocularBlend = getVal(
     /<acx:InterocularBlend>([\d.-]+)<\/acx:InterocularBlend>/,
   );
-  const eyeMouthDist = getVal(/<acx:EyeMouthDist>([\d.-]+)<\/acx:EyeMouthDist>/);
+  const eyeMouthDist = getVal(
+    /<acx:EyeMouthDist>([\d.-]+)<\/acx:EyeMouthDist>/,
+  );
   const ovalWidth = getVal(/<acx:OvalWidth>([\d.-]+)<\/acx:OvalWidth>/);
 
   const requiredFields: Record<string, unknown> = {

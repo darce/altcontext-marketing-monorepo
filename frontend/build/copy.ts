@@ -121,7 +121,9 @@ const parseRuntimeMetadata = (): RuntimeMetadataEntry[] => {
   const parsed: unknown = JSON.parse(raw);
 
   if (!Array.isArray(parsed)) {
-    throw new Error(`Invalid metadata format in ${GENERATED_RUNTIME_METADATA}.`);
+    throw new Error(
+      `Invalid metadata format in ${GENERATED_RUNTIME_METADATA}.`,
+    );
   }
 
   return parsed.map((entry, index) => {
@@ -246,13 +248,19 @@ const copyGeneratedRuntimeArtifacts = (): void => {
     );
   }
 
-  copyRecursive(GENERATED_RUNTIME_METADATA, path.join(DIST_DIR, "metadata.json"));
+  copyRecursive(
+    GENERATED_RUNTIME_METADATA,
+    path.join(DIST_DIR, "metadata.json"),
+  );
   if (VERBOSE) {
     console.log("🧠 Copied generated runtime metadata to dist/metadata.json");
   }
 
   if (fs.existsSync(GENERATED_POSE_BOUNDS)) {
-    copyRecursive(GENERATED_POSE_BOUNDS, path.join(DIST_DIR, "pose-bounds.json"));
+    copyRecursive(
+      GENERATED_POSE_BOUNDS,
+      path.join(DIST_DIR, "pose-bounds.json"),
+    );
     if (VERBOSE) {
       console.log("🧭 Copied generated pose bounds to dist/pose-bounds.json");
     }

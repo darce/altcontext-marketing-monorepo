@@ -1,4 +1,4 @@
-declare module 'critical' {
+declare module "critical" {
   export interface CriticalTarget {
     html: string;
     uncritical?: string;

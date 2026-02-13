@@ -9,7 +9,12 @@ import {
   writeExtractionOutputs,
 } from "./extract-metadata/pipeline";
 import { INPUT_DIR } from "./extract-metadata/constants";
-import { getLimit, getSubsetPrefixes, getVerbose, normalizeSubsetToken } from "./derivatives/cli";
+import {
+  getLimit,
+  getSubsetPrefixes,
+  getVerbose,
+  normalizeSubsetToken,
+} from "./derivatives/cli";
 
 const toErrorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);

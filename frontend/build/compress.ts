@@ -1,18 +1,19 @@
-import fs from 'node:fs';
-import path from 'node:path';
-import process from 'node:process';
-import { brotliCompressSync, constants, gzipSync } from 'node:zlib';
+import fs from "node:fs";
+import path from "node:path";
+import process from "node:process";
+import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 
-const DIST_DIR = './dist';
-const VERBOSE = process.argv.includes('--verbose') || process.env.BUILD_VERBOSE === '1';
+const DIST_DIR = "./dist";
+const VERBOSE =
+  process.argv.includes("--verbose") || process.env.BUILD_VERBOSE === "1";
 const COMPRESSIBLE_EXTENSIONS = new Set([
-  '.html',
-  '.css',
-  '.js',
-  '.json',
-  '.svg',
-  '.txt',
-  '.xml'
+  ".html",
+  ".css",
+  ".js",
+  ".json",
+  ".svg",
+  ".txt",
+  ".xml",
 ]);
 
 function collectFiles(dirPath: string): string[] {
@@ -32,7 +33,7 @@ function collectFiles(dirPath: string): string[] {
 }
 
 function isCompressible(filePath: string): boolean {
-  if (filePath.endsWith('.gz') || filePath.endsWith('.br')) return false;
+  if (filePath.endsWith(".gz") || filePath.endsWith(".br")) return false;
   return COMPRESSIBLE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
@@ -42,8 +43,8 @@ function compressFile(filePath: string) {
   const br = brotliCompressSync(raw, {
     params: {
       [constants.BROTLI_PARAM_QUALITY]: 11,
-      [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT
-    }
+      [constants.BROTLI_PARAM_MODE]: constants.BROTLI_MODE_TEXT,
+    },
   });
 
   fs.writeFileSync(`${filePath}.gz`, gzip);
@@ -52,7 +53,7 @@ function compressFile(filePath: string) {
   return {
     raw: raw.length,
     gzip: gzip.length,
-    br: br.length
+    br: br.length,
   };
 }
 
@@ -76,20 +77,20 @@ async function main() {
     if (VERBOSE) {
       const rel = path.relative(DIST_DIR, file);
       console.log(
-        `📦 ${rel}: raw=${result.raw} gzip=${result.gzip} br=${result.br}`
+        `📦 ${rel}: raw=${result.raw} gzip=${result.gzip} br=${result.br}`,
       );
     }
   }
 
   console.log(
     `✅ Precompressed ${files.length} text assets (.gz/.br). ` +
-    `Raw ${(rawBytes / 1024 / 1024).toFixed(2)} MB -> ` +
-    `Gzip ${(gzipBytes / 1024 / 1024).toFixed(2)} MB, ` +
-    `Brotli ${(brBytes / 1024 / 1024).toFixed(2)} MB.`
+      `Raw ${(rawBytes / 1024 / 1024).toFixed(2)} MB -> ` +
+      `Gzip ${(gzipBytes / 1024 / 1024).toFixed(2)} MB, ` +
+      `Brotli ${(brBytes / 1024 / 1024).toFixed(2)} MB.`,
   );
 }
 
 main().catch((err) => {
-  console.error('Fatal error during compression:', err);
+  console.error("Fatal error during compression:", err);
   process.exitCode = 1;
 });

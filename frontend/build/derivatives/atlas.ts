@@ -178,7 +178,11 @@ export const buildAtlasVariant = (
   const tileSize = variant.tileSize;
   const atlasDimension = tileSize * ATLAS_GRID_SIZE;
 
-  const args: string[] = ["-size", `${atlasDimension}x${atlasDimension}`, "xc:none"];
+  const args: string[] = [
+    "-size",
+    `${atlasDimension}x${atlasDimension}`,
+    "xc:none",
+  ];
 
   for (let tileIndex = 0; tileIndex < chunk.length; tileIndex += 1) {
     const item = chunk[tileIndex];
@@ -258,9 +262,7 @@ export const buildAtlases = (
     const start = atlasIndex * itemsPerAtlas;
     // Re-sort each page by yaw to keep face direction continuous within
     // a single atlas, even when the page straddles a tier boundary.
-    const chunk = sorted
-      .slice(start, start + itemsPerAtlas)
-      .sort(comparePose);
+    const chunk = sorted.slice(start, start + itemsPerAtlas).sort(comparePose);
 
     for (let tileIndex = 0; tileIndex < chunk.length; tileIndex += 1) {
       const item = chunk[tileIndex];
@@ -292,10 +294,15 @@ export const buildAtlases = (
     }
 
     const variantOutputs = PROGRESSIVE_ATLAS_VARIANTS.map((variant) =>
-      buildAtlasVariant(chunk, atlasIndex, variant, outputAtlasDir, outputImageDir),
+      buildAtlasVariant(
+        chunk,
+        atlasIndex,
+        variant,
+        outputAtlasDir,
+        outputImageDir,
+      ),
     );
-    for (let tileIndex = 0; tileIndex < chunk.length; tileIndex += 1) {
-      const item = chunk[tileIndex];
+    for (const item of chunk) {
       const placement = placementsByFile.get(item.file);
       if (!placement) {
         throw new Error(`Missing atlas placement for ${item.file}`);
@@ -312,7 +319,10 @@ export const buildAtlases = (
       }
     }
 
-    atlasBytes += variantOutputs.reduce((total, output) => total + output.bytes, 0);
+    atlasBytes += variantOutputs.reduce(
+      (total, output) => total + output.bytes,
+      0,
+    );
 
     if (verbose) {
       const sizeLabel = variantOutputs

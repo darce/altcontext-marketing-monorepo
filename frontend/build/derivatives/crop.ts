@@ -69,7 +69,10 @@ export const pointToPixels = (point: Point, size: ImageSize): Point => {
 };
 
 /** Compute a square crop around the face with deterministic padding. */
-export const computeCrop = (item: SourceMetadataItem, size: ImageSize): CropBox => {
+export const computeCrop = (
+  item: SourceMetadataItem,
+  size: ImageSize,
+): CropBox => {
   const ovalLeft = pointToPixels(item.features.oval.l, size);
   const ovalRight = pointToPixels(item.features.oval.r, size);
   const forehead = pointToPixels(item.features.forehead, size);
@@ -284,7 +287,10 @@ export const toAlignmentScore = (deviationPx: number): number => {
   return roundTo(clamp(raw, 0, 1), 4);
 };
 
-const distanceToBlockBoundary = (valuePx: number, blockSize: number): number => {
+const distanceToBlockBoundary = (
+  valuePx: number,
+  blockSize: number,
+): number => {
   const mod = ((valuePx % blockSize) + blockSize) % blockSize;
   return Math.min(mod, blockSize - mod);
 };
@@ -295,8 +301,8 @@ export const isEyeRegionBlockBoundaryCritical = (
   transform: RuntimeTransform,
   widthPx: number,
   heightPx: number,
-  blockSize: number = 8,
-  thresholdPx: number = 1.25,
+  blockSize = 8,
+  thresholdPx = 1.25,
 ): boolean => {
   const alignedLeft = applyRuntimeTransform(eyeLeft, transform);
   const alignedRight = applyRuntimeTransform(eyeRight, transform);
@@ -336,7 +342,11 @@ export const buildRuntimeMetadata = (
   const srcScalePx =
     0.55 * interocularBlend + 0.3 * ovalWidth + 0.15 * faceHeight;
   const transform = computeRuntimeTransform(eyeLeft, eyeRight, chin, forehead);
-  const alignedMidpoint = computeAlignedEyeMidpoint(eyeLeft, eyeRight, transform);
+  const alignedMidpoint = computeAlignedEyeMidpoint(
+    eyeLeft,
+    eyeRight,
+    transform,
+  );
   const alignmentDeviationPx = computeAlignmentDeviationPx(
     alignedMidpoint,
     OUTPUT_SIZE,

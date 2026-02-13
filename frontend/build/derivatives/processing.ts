@@ -151,7 +151,10 @@ export const processSourceItems = async (
         continue;
       }
 
-      const wantsRender = shouldRenderDerivative(options.recropMode, outputExists);
+      const wantsRender = shouldRenderDerivative(
+        options.recropMode,
+        outputExists,
+      );
       const sourceMatchesOutput =
         path.resolve(sourcePath) === path.resolve(outputPath);
       const canRender = wantsRender && !sourceMatchesOutput;

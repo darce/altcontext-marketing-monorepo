@@ -126,7 +126,10 @@ export const derivePoseBoundsFromRuntime = (
   };
 };
 
-export const writePoseBounds = (outputFile: string, poseBounds: PoseBounds): void => {
+export const writePoseBounds = (
+  outputFile: string,
+  poseBounds: PoseBounds,
+): void => {
   ensureDir(path.dirname(outputFile));
   fs.writeFileSync(outputFile, JSON.stringify(poseBounds), "utf8");
 };

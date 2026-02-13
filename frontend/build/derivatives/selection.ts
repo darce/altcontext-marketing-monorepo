@@ -20,8 +20,11 @@ export interface QualityGateResult {
   rejected: QualityRejection[];
 }
 
-const isZeroPose = (pose: { yaw: number; pitch: number; roll: number }): boolean =>
-  pose.yaw === 0 && pose.pitch === 0 && pose.roll === 0;
+const isZeroPose = (pose: {
+  yaw: number;
+  pitch: number;
+  roll: number;
+}): boolean => pose.yaw === 0 && pose.pitch === 0 && pose.roll === 0;
 
 const matchesSubsetPrefix = (fileName: string, prefixes: string[]): boolean => {
   if (prefixes.length === 0) {
@@ -39,7 +42,11 @@ const isMirrorFile = (fileName: string): boolean => {
   return stem.endsWith(MIRROR_SUFFIX);
 };
 
-const toCoverageCellKey = (yaw: number, pitch: number, step: number): string => {
+const toCoverageCellKey = (
+  yaw: number,
+  pitch: number,
+  step: number,
+): string => {
   const yawCell = Math.round(yaw / step);
   const pitchCell = Math.round(pitch / step);
   return `${yawCell}:${pitchCell}`;
