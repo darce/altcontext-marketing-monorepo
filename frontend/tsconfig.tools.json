@@ -5,9 +5,10 @@
     "module": "ES2022",
     "moduleResolution": "Bundler",
     "types": ["node"],
+    "allowJs": true,
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["build/**/*.ts", "build/**/*.d.ts"]
+  "include": ["build/**/*.ts", "build/**/*.d.ts", "build/**/*.mjs"]
 }

@@ -5,7 +5,8 @@
 #   make build          → fast default (no recrop)
 #   make build-full     → data + derivatives + assets
 #   make ci             → full quality-gate check
-#   make deploy         → build + push to GitHub Pages
+#   make deploy         → fast build (no recrop) + push to GitHub Pages
+#   make deploy-full    → full data build + push to GitHub Pages
 #
 # All npm scripts are called through this Makefile so tooling has a single
 # entry point regardless of whether a human or agent is driving.
@@ -194,9 +195,21 @@ ci: install  ## Full CI pipeline: build + typecheck + lint + stylelint + format
 # ---------------------------------------------------------------------------
 # Deploy (GitHub Pages)
 # ---------------------------------------------------------------------------
-.PHONY: deploy
+.PHONY: deploy deploy-full
 
-deploy: build-full verify-dist  ## Build, verify, then push dist to GitHub Pages
+deploy: build verify-dist  ## Fast deploy: no data pipeline recrop
+	@echo "== Deploying frontend/dist to GitHub Pages =="
+	git add -f $(DIST)/
+	git stash push -m "deploy-stash" -- $(DIST)/
+	git checkout gh-pages 2>/dev/null || git checkout -b gh-pages
+	git stash pop
+	git add $(DIST)/
+	git commit -m "deploy: $$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
+	git push origin gh-pages
+	git checkout -
+	@echo "== Deploy complete =="
+
+deploy-full: build-full verify-dist  ## Full deploy: data pipeline + assets
 	@echo "== Deploying frontend/dist to GitHub Pages =="
 	git add -f $(DIST)/
 	git stash push -m "deploy-stash" -- $(DIST)/

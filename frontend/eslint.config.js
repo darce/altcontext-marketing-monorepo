@@ -13,7 +13,9 @@ export default tseslint.config(
       "public/**",
       "src/assets/*.js",
       "eslint.config.js",
+      "stylelint.config.js",
       "offline-scripts/*.ts",
+      "input-images/**",
     ],
   },
   eslint.configs.recommended,
@@ -44,6 +46,14 @@ export default tseslint.config(
 
       // Node and ESM Discipline
       "no-restricted-globals": ["error", "process", "__dirname", "__filename"],
+    },
+  },
+  {
+    files: ["build/**/*.mjs"],
+    languageOptions: {
+      globals: {
+        console: "readonly",
+      },
     },
   },
   prettierConfig,
