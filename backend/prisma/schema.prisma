@@ -1,0 +1,251 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ConsentStatus {
+  pending
+  express
+  implied
+  withdrawn
+}
+
+enum LinkSource {
+  form_submit
+  same_ip_ua_window
+  manual_merge
+}
+
+enum ValidationStatus {
+  accepted
+  rejected
+  invalid
+}
+
+enum TrafficSource {
+  direct
+  organic_search
+  paid_search
+  social
+  email
+  referral
+  campaign
+  internal
+  unknown
+}
+
+enum DeviceType {
+  desktop
+  mobile
+  tablet
+  bot
+  unknown
+}
+
+model Visitor {
+  id          String   @id @default(uuid())
+  anonId      String   @unique @map("anon_id")
+  firstSeenAt DateTime @default(now()) @map("first_seen_at")
+  lastSeenAt  DateTime @default(now()) @map("last_seen_at")
+  firstIpHash String?  @db.VarChar(128) @map("first_ip_hash")
+  lastIpHash  String?  @db.VarChar(128) @map("last_ip_hash")
+  firstUaHash String?  @db.VarChar(128) @map("first_ua_hash")
+  lastUaHash  String?  @db.VarChar(128) @map("last_ua_hash")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  sessions        Session[]
+  events          Event[]
+  webTrafficLogs  WebTrafficLog[]
+  leadIdentities  LeadIdentity[]
+  formSubmissions FormSubmission[]
+
+  @@index([lastSeenAt], map: "visitors_last_seen_at_idx")
+  @@map("visitors")
+}
+
+model Session {
+  id          String    @id @default(uuid())
+  visitorId   String    @map("visitor_id")
+  startedAt   DateTime  @default(now()) @map("started_at")
+  endedAt     DateTime? @map("ended_at")
+  lastEventAt DateTime  @default(now()) @map("last_event_at")
+  landingPath String?   @db.Text @map("landing_path")
+  referrer    String?   @db.Text
+  utmSource   String?   @db.VarChar(255) @map("utm_source")
+  utmMedium   String?   @db.VarChar(255) @map("utm_medium")
+  utmCampaign String?   @db.VarChar(255) @map("utm_campaign")
+  utmTerm     String?   @db.VarChar(255) @map("utm_term")
+  utmContent  String?   @db.VarChar(255) @map("utm_content")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  visitor         Visitor          @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  events          Event[]
+  webTrafficLogs  WebTrafficLog[]
+  formSubmissions FormSubmission[]
+
+  @@index([visitorId, startedAt], map: "sessions_visitor_id_started_at_idx")
+  @@index([visitorId, lastEventAt], map: "sessions_visitor_id_last_event_at_idx")
+  @@map("sessions")
+}
+
+model Event {
+  id            String         @id @default(uuid())
+  visitorId     String         @map("visitor_id")
+  sessionId     String?        @map("session_id")
+  eventType     String         @db.VarChar(64) @map("event_type")
+  path          String?        @db.Text
+  timestamp     DateTime       @default(now())
+  ipHash        String?        @db.VarChar(128) @map("ip_hash")
+  uaHash        String?        @db.VarChar(128) @map("ua_hash")
+  props         Json?
+  createdAt     DateTime       @default(now()) @map("created_at")
+  webTrafficLog WebTrafficLog?
+
+  visitor Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([visitorId, timestamp], map: "events_visitor_id_timestamp_idx")
+  @@index([eventType, timestamp], map: "events_event_type_timestamp_idx")
+  @@index([path, timestamp], map: "events_path_timestamp_idx")
+  @@index([sessionId, timestamp], map: "events_session_id_timestamp_idx")
+  @@map("events")
+}
+
+model WebTrafficLog {
+  id                 String        @id @default(uuid())
+  eventId            String?       @unique @map("event_id")
+  visitorId          String        @map("visitor_id")
+  sessionId          String        @map("session_id")
+  eventType          String        @db.VarChar(64) @map("event_type")
+  propertyId         String        @default("default") @db.VarChar(128) @map("property_id")
+  host               String        @db.VarChar(255)
+  path               String        @db.Text
+  referrer           String?       @db.Text
+  referrerHost       String?       @db.VarChar(255) @map("referrer_host")
+  trafficSource      TrafficSource @default(unknown) @map("traffic_source")
+  utmSource          String?       @db.VarChar(255) @map("utm_source")
+  utmMedium          String?       @db.VarChar(255) @map("utm_medium")
+  utmCampaign        String?       @db.VarChar(255) @map("utm_campaign")
+  utmTerm            String?       @db.VarChar(255) @map("utm_term")
+  utmContent         String?       @db.VarChar(255) @map("utm_content")
+  pageTitle          String?       @db.VarChar(512) @map("page_title")
+  language           String?       @db.VarChar(32)
+  deviceType         DeviceType    @default(unknown) @map("device_type")
+  browserName        String?       @db.VarChar(64) @map("browser_name")
+  browserVersion     String?       @db.VarChar(32) @map("browser_version")
+  osName             String?       @db.VarChar(64) @map("os_name")
+  osVersion          String?       @db.VarChar(32) @map("os_version")
+  countryCode        String?       @db.VarChar(2) @map("country_code")
+  region             String?       @db.VarChar(128)
+  city               String?       @db.VarChar(128)
+  timezone           String?       @db.VarChar(64)
+  screenWidth        Int?          @map("screen_width")
+  screenHeight       Int?          @map("screen_height")
+  viewportWidth      Int?          @map("viewport_width")
+  viewportHeight     Int?          @map("viewport_height")
+  engagedTimeMs      Int?          @map("engaged_time_ms")
+  scrollDepthPercent Int?          @map("scroll_depth_percent")
+  fcpMs              Int?          @map("fcp_ms")
+  lcpMs              Int?          @map("lcp_ms")
+  inpMs              Int?          @map("inp_ms")
+  clsScore           Float?        @map("cls_score")
+  ttfbMs             Int?          @map("ttfb_ms")
+  isEntrance         Boolean       @default(false) @map("is_entrance")
+  isExit             Boolean       @default(false) @map("is_exit")
+  isConversion       Boolean       @default(false) @map("is_conversion")
+  ipHash             String?       @db.VarChar(128) @map("ip_hash")
+  uaHash             String?       @db.VarChar(128) @map("ua_hash")
+  occurredAt         DateTime      @default(now()) @map("occurred_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  event   Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
+  visitor Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+  session Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, occurredAt], map: "web_traffic_logs_property_id_occurred_at_idx")
+  @@index([host, path, occurredAt], map: "web_traffic_logs_host_path_occurred_at_idx")
+  @@index([trafficSource, occurredAt], map: "web_traffic_logs_traffic_source_occurred_at_idx")
+  @@index([visitorId, occurredAt], map: "web_traffic_logs_visitor_id_occurred_at_idx")
+  @@index([sessionId, occurredAt], map: "web_traffic_logs_session_id_occurred_at_idx")
+  @@index([utmSource, utmMedium, utmCampaign, occurredAt], map: "web_traffic_logs_utm_occurred_at_idx")
+  @@index([deviceType, occurredAt], map: "web_traffic_logs_device_type_occurred_at_idx")
+  @@map("web_traffic_logs")
+}
+
+model Lead {
+  id              String        @id @default(uuid())
+  emailNormalized String        @unique @db.VarChar(320) @map("email_normalized")
+  emailDomain     String?       @db.VarChar(255) @map("email_domain")
+  consentStatus   ConsentStatus @default(pending) @map("consent_status")
+  firstCapturedAt DateTime      @default(now()) @map("first_captured_at")
+  lastCapturedAt  DateTime      @default(now()) @map("last_captured_at")
+  sourceChannel   String?       @db.VarChar(255) @map("source_channel")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+
+  identities    LeadIdentity[]
+  submissions   FormSubmission[]
+  consentEvents ConsentEvent[]
+
+  @@index([lastCapturedAt], map: "leads_last_captured_at_idx")
+  @@map("leads")
+}
+
+model LeadIdentity {
+  id         String     @id @default(uuid())
+  leadId     String     @map("lead_id")
+  visitorId  String     @map("visitor_id")
+  linkSource LinkSource @default(form_submit) @map("link_source")
+  confidence Float      @default(1)
+  linkedAt   DateTime   @default(now()) @map("linked_at")
+  createdAt  DateTime   @default(now()) @map("created_at")
+
+  lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  visitor Visitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
+
+  @@unique([leadId, visitorId, linkSource], map: "lead_identities_lead_visitor_source_key")
+  @@index([leadId, linkedAt], map: "lead_identities_lead_id_linked_at_idx")
+  @@index([visitorId, linkedAt], map: "lead_identities_visitor_id_linked_at_idx")
+  @@map("lead_identities")
+}
+
+model FormSubmission {
+  id               String           @id @default(uuid())
+  leadId           String?          @map("lead_id")
+  visitorId        String?          @map("visitor_id")
+  sessionId        String?          @map("session_id")
+  formName         String           @db.VarChar(255) @map("form_name")
+  payload          Json?
+  submittedAt      DateTime         @default(now()) @map("submitted_at")
+  validationStatus ValidationStatus @default(accepted) @map("validation_status")
+  createdAt        DateTime         @default(now()) @map("created_at")
+
+  lead    Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  visitor Visitor? @relation(fields: [visitorId], references: [id], onDelete: SetNull)
+  session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, submittedAt], map: "form_submissions_lead_id_submitted_at_idx")
+  @@index([visitorId, submittedAt], map: "form_submissions_visitor_id_submitted_at_idx")
+  @@index([sessionId, submittedAt], map: "form_submissions_session_id_submitted_at_idx")
+  @@map("form_submissions")
+}
+
+model ConsentEvent {
+  id        String        @id @default(uuid())
+  leadId    String        @map("lead_id")
+  status    ConsentStatus
+  source    String        @db.VarChar(128)
+  ipHash    String?       @db.VarChar(128) @map("ip_hash")
+  timestamp DateTime      @default(now())
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId, timestamp], map: "consent_events_lead_id_timestamp_idx")
+  @@map("consent_events")
+}

@@ -21,6 +21,9 @@ PG_LOG      := /tmp/pg-backend.log
 PG_DB       := altcontext_dev
 PG_USER     := $(USER)
 DATABASE_URL ?= postgresql://$(PG_USER)@localhost:5432/$(PG_DB)
+TEST_SCHEMA := backend_test
+TEST_DATABASE_URL := postgresql://$(PG_USER)@localhost:5432/$(PG_DB)?schema=$(TEST_SCHEMA)
+TEST_IP_HASH_PEPPER := 0123456789abcdef0123456789abcdef
 
 export DATABASE_URL
 
@@ -38,24 +41,28 @@ node_modules: package.json
 # ---------------------------------------------------------------------------
 # Quality gates
 # ---------------------------------------------------------------------------
-.PHONY: typecheck lint format check
+.PHONY: typecheck lint format check test
 
 typecheck: install
-	npx tsc --noEmit
+	npm run typecheck
 
 lint: install
-	npx eslint .
+	npm run lint
 
 lint-fix: install
-	npx eslint . --fix
+	npm run lint:fix
 
 format: install
-	npx prettier . --check
+	npm run format
 
 format-fix: install
-	npx prettier . --write
+	npm run format:fix
 
 check: typecheck lint format  ## Run all quality gates
+
+test: install db-start db-create ## Run backend tests against isolated schema
+	DATABASE_URL="$(TEST_DATABASE_URL)" npm run migrate:reset
+	NODE_ENV=test LOG_LEVEL=silent DATABASE_URL="$(TEST_DATABASE_URL)" IP_HASH_PEPPER="$(TEST_IP_HASH_PEPPER)" npm run test
 
 # ---------------------------------------------------------------------------
 # Database lifecycle (local Postgres)
@@ -90,7 +97,7 @@ db-destroy:  ## Drop the dev database
 db-reset: db-destroy db-create migrate  ## Drop, recreate, and migrate
 
 db-studio: install  ## Open Prisma Studio
-	npx prisma studio
+	npm run db:studio
 
 # ---------------------------------------------------------------------------
 # Migrations (Prisma)
@@ -98,19 +105,19 @@ db-studio: install  ## Open Prisma Studio
 .PHONY: migrate migrate-deploy migrate-status migrate-reset generate
 
 migrate: install db-start  ## Create and apply a dev migration (interactive)
-	npx prisma migrate dev
+	npm run migrate
 
 migrate-deploy: install db-start  ## Apply pending migrations (CI / production)
-	npx prisma migrate deploy
+	npm run migrate:deploy
 
 migrate-status: install db-start  ## Show migration status
-	npx prisma migrate status
+	npm run migrate:status
 
 migrate-reset: install db-start  ## Reset DB and re-apply all migrations
-	npx prisma migrate reset --force
+	npm run migrate:reset
 
 generate: install  ## Regenerate Prisma Client
-	npx prisma generate
+	npm run prisma:generate
 
 # ---------------------------------------------------------------------------
 # Server
@@ -122,7 +129,7 @@ start: install  ## Start the server (production-like)
 
 dev: install db-start db-create  ## Start local dev: Postgres + server with watch
 	@echo "== DB ready at $(DATABASE_URL) =="
-	npx tsx watch server.ts || npm run dev || npm run start
+	npm run dev
 
 stop: db-stop  ## Stop local Postgres (server stopped via Ctrl-C)
 
@@ -187,7 +194,7 @@ ci: check migrate-deploy  ## CI pipeline: quality gates + migration
 .PHONY: clean clean-all
 
 clean:
-	rm -rf dist/ .prisma/
+	rm -rf dist/
 
 clean-all: clean
 	rm -rf node_modules
