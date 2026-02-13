@@ -97,7 +97,6 @@ export interface DomFacade {
   setImageSource: (src: string) => void;
   setImageTransform: (transform: string) => void;
   setImageRendering: (mode: "pixelated" | "auto") => void;
-  setEdgeFade: (intensity: number) => void;
   getContainerRect: () => DOMRect | null;
   renderMetadata: (item: MetadataItem) => void;
 }

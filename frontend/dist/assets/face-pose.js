@@ -2,7 +2,7 @@
   // src/assets/face-pose/config.ts
   var SELECTORS = {
     container: "face-container",
-    scrubSurface: "main.container",
+    scrubSurface: "body",
     image: "face-image",
     loader: "face-loader",
     metadataPanel: "face-metadata",
@@ -38,9 +38,6 @@
     coverageMinItemsPerCell: 2,
     poseBoundsPaddingRatio: 0
   };
-  var VISUAL_CONFIG = {
-    edgeFadeMaxOpacity: 0.32
-  };
   var PRELOAD_CONFIG = {
     blockUntilComplete: true,
     maxConcurrent: 12,
@@ -66,19 +63,6 @@
     const loader = document.getElementById(SELECTORS.loader);
     const metadataPanel = document.getElementById(SELECTORS.metadataPanel);
     const metadataTitle = document.getElementById(SELECTORS.metadataTitle);
-    let edgeFade = null;
-    if (faceContainer instanceof HTMLElement) {
-      const existingEdgeFade = faceContainer.querySelector(".face-edge-fade");
-      if (existingEdgeFade) {
-        edgeFade = existingEdgeFade;
-      } else {
-        const createdEdgeFade = document.createElement("div");
-        createdEdgeFade.className = "face-edge-fade";
-        createdEdgeFade.setAttribute("aria-hidden", "true");
-        faceContainer.appendChild(createdEdgeFade);
-        edgeFade = createdEdgeFade;
-      }
-    }
     const hasRequiredNodes = faceContainer instanceof HTMLElement && interactionSurface instanceof HTMLElement && image instanceof HTMLImageElement && loader instanceof HTMLElement;
     const setLoaderText = (text) => {
       if (!(loader instanceof HTMLElement)) {
@@ -116,13 +100,6 @@
       }
       image.style.imageRendering = mode;
     };
-    const setEdgeFade = (intensity) => {
-      if (!(edgeFade instanceof HTMLElement)) {
-        return;
-      }
-      const safe = Math.max(0, Math.min(1, intensity));
-      edgeFade.style.opacity = safe.toFixed(3);
-    };
     const getContainerRect = () => {
       if (!(interactionSurface instanceof HTMLElement)) {
         return null;
@@ -152,7 +129,6 @@ roll: ${item.pose.roll}`;
       setImageSource,
       setImageTransform,
       setImageRendering,
-      setEdgeFade,
       getContainerRect,
       renderMetadata
     };
@@ -941,18 +917,6 @@ roll: ${item.pose.roll}`;
       pitch: mapUnitToRange(easedY, poseBounds.minPitch, poseBounds.maxPitch)
     };
   };
-  var toEdgeFadeIntensity = (pose, poseBounds) => {
-    const yawSpan = Math.max(1e-6, poseBounds.maxYaw - poseBounds.minYaw);
-    const pitchSpan = Math.max(1e-6, poseBounds.maxPitch - poseBounds.minPitch);
-    const yawCenter = (poseBounds.minYaw + poseBounds.maxYaw) * 0.5;
-    const pitchCenter = (poseBounds.minPitch + poseBounds.maxPitch) * 0.5;
-    const yawNormalized = Math.abs((pose.yaw - yawCenter) / (yawSpan * 0.5));
-    const pitchNormalized = Math.abs((pose.pitch - pitchCenter) / (pitchSpan * 0.5));
-    const edgeProximity = clamp(Math.max(yawNormalized, pitchNormalized), 0, 1);
-    const fadeStart = 0.72;
-    const fadeProgress = clamp((edgeProximity - fadeStart) / (1 - fadeStart), 0, 1);
-    return fadeProgress * VISUAL_CONFIG.edgeFadeMaxOpacity;
-  };
   var pickInitialPose = (metadata, poseBounds) => {
     if (metadata.length === 0) {
       return {
@@ -1069,7 +1033,6 @@ roll: ${item.pose.roll}`;
     }
     dom.hideLoader();
     dom.showImage();
-    dom.setEdgeFade(0);
     state.phase = "ready";
     const { updateFace } = createFaceUpdater(dom, state, poseIndex);
     const commandQueue = createPoseCommandQueue(state, updateFace);
@@ -1080,7 +1043,6 @@ roll: ${item.pose.roll}`;
           return;
         }
         const pose = toPoseFromPointer(event, rect, poseBounds);
-        dom.setEdgeFade(toEdgeFadeIntensity(pose, poseBounds));
         const now = nowMs2();
         if (state.lastPointerPose && state.lastPointerAtMs > 0) {
           const yawDelta = pose.yaw - state.lastPointerPose.yaw;
@@ -1105,7 +1067,6 @@ roll: ${item.pose.roll}`;
       });
     }
     const initialPose = pickInitialPose(metadata, poseBounds);
-    dom.setEdgeFade(toEdgeFadeIntensity(initialPose, poseBounds));
     commandQueue.enqueue(initialPose.yaw, initialPose.pitch);
     if (preloadPlan.backgroundStages.length > 0) {
       const runBackgroundPreload = async () => {

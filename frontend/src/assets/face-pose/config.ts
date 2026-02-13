@@ -1,6 +1,6 @@
 export const SELECTORS = {
   container: "face-container",
-  scrubSurface: "main.container",
+  scrubSurface: "body",
   image: "face-image",
   loader: "face-loader",
   metadataPanel: "face-metadata",
@@ -36,10 +36,6 @@ export const POSE_CONFIG = {
   coverageCellStep: 5,
   coverageMinItemsPerCell: 2,
   poseBoundsPaddingRatio: 0,
-} as const;
-
-export const VISUAL_CONFIG = {
-  edgeFadeMaxOpacity: 0.32,
 } as const;
 
 export const PRELOAD_CONFIG = {

@@ -2,7 +2,6 @@ import {
   POINTER_NOISE_CONFIG,
   POSE_CONFIG,
   PRELOAD_CONFIG,
-  VISUAL_CONFIG,
 } from "./config";
 import { createDomFacade } from "./dom";
 import { loadMetadata, loadPoseBounds } from "./metadata";
@@ -206,19 +205,6 @@ const toPoseFromPointer = (
   };
 };
 
-const toEdgeFadeIntensity = (pose: PoseCommand, poseBounds: PoseBounds): number => {
-  const yawSpan = Math.max(1e-6, poseBounds.maxYaw - poseBounds.minYaw);
-  const pitchSpan = Math.max(1e-6, poseBounds.maxPitch - poseBounds.minPitch);
-  const yawCenter = (poseBounds.minYaw + poseBounds.maxYaw) * 0.5;
-  const pitchCenter = (poseBounds.minPitch + poseBounds.maxPitch) * 0.5;
-  const yawNormalized = Math.abs((pose.yaw - yawCenter) / (yawSpan * 0.5));
-  const pitchNormalized = Math.abs((pose.pitch - pitchCenter) / (pitchSpan * 0.5));
-  const edgeProximity = clamp(Math.max(yawNormalized, pitchNormalized), 0, 1);
-  const fadeStart = 0.72;
-  const fadeProgress = clamp((edgeProximity - fadeStart) / (1 - fadeStart), 0, 1);
-  return fadeProgress * VISUAL_CONFIG.edgeFadeMaxOpacity;
-};
-
 const pickInitialPose = (
   metadata: MetadataItem[],
   poseBounds: PoseBounds,
@@ -367,7 +353,6 @@ const initializeFacePose = async (): Promise<void> => {
   }
   dom.hideLoader();
   dom.showImage();
-  dom.setEdgeFade(0);
   state.phase = "ready";
 
   const { updateFace } = createFaceUpdater(dom, state, poseIndex);
@@ -380,7 +365,6 @@ const initializeFacePose = async (): Promise<void> => {
         return;
       }
       const pose = toPoseFromPointer(event, rect, poseBounds);
-      dom.setEdgeFade(toEdgeFadeIntensity(pose, poseBounds));
       const now = nowMs();
       if (state.lastPointerPose && state.lastPointerAtMs > 0) {
         const yawDelta = pose.yaw - state.lastPointerPose.yaw;
@@ -410,7 +394,6 @@ const initializeFacePose = async (): Promise<void> => {
   }
 
   const initialPose = pickInitialPose(metadata, poseBounds);
-  dom.setEdgeFade(toEdgeFadeIntensity(initialPose, poseBounds));
   commandQueue.enqueue(initialPose.yaw, initialPose.pitch);
 
   if (preloadPlan.backgroundStages.length > 0) {

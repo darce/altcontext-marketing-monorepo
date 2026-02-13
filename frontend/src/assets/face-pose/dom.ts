@@ -16,21 +16,6 @@ export const createDomFacade = (): DomFacade => {
   const loader = document.getElementById(SELECTORS.loader);
   const metadataPanel = document.getElementById(SELECTORS.metadataPanel);
   const metadataTitle = document.getElementById(SELECTORS.metadataTitle);
-  let edgeFade: HTMLElement | null = null;
-
-  if (faceContainer instanceof HTMLElement) {
-    const existingEdgeFade =
-      faceContainer.querySelector<HTMLElement>(".face-edge-fade");
-    if (existingEdgeFade) {
-      edgeFade = existingEdgeFade;
-    } else {
-      const createdEdgeFade = document.createElement("div");
-      createdEdgeFade.className = "face-edge-fade";
-      createdEdgeFade.setAttribute("aria-hidden", "true");
-      faceContainer.appendChild(createdEdgeFade);
-      edgeFade = createdEdgeFade;
-    }
-  }
 
   const hasRequiredNodes =
     faceContainer instanceof HTMLElement &&
@@ -80,14 +65,6 @@ export const createDomFacade = (): DomFacade => {
     image.style.imageRendering = mode;
   };
 
-  const setEdgeFade = (intensity: number): void => {
-    if (!(edgeFade instanceof HTMLElement)) {
-      return;
-    }
-    const safe = Math.max(0, Math.min(1, intensity));
-    edgeFade.style.opacity = safe.toFixed(3);
-  };
-
   const getContainerRect = (): DOMRect | null => {
     if (!(interactionSurface instanceof HTMLElement)) {
       return null;
@@ -122,7 +99,6 @@ export const createDomFacade = (): DomFacade => {
     setImageSource,
     setImageTransform,
     setImageRendering,
-    setEdgeFade,
     getContainerRect,
     renderMetadata,
   };
