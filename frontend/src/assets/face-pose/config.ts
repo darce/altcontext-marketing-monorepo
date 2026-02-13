@@ -52,5 +52,13 @@ export const POINTER_NOISE_CONFIG = {
   edgeCompressionOutput: 0.08,
 } as const;
 
+export const GYRO_CONFIG = {
+  betaOffset: 50,
+  minPoseDeltaToUpdate: 0.1,
+  gammaMaxAbs: 90,
+  interactionCoordinationThresholdMs: 500,
+  noEventTimeoutMs: 2000,
+} as const;
+
 export const METADATA_ERROR_HINT =
   "Metadata is missing precomputed face transforms. Run `npm --prefix frontend run build:derivatives`.";

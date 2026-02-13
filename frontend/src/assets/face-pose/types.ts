@@ -85,6 +85,9 @@ export interface RuntimeState {
   lastPointerAtMs: number;
   pointerVelocityDegPerMs: number;
   lastHintAtMs: number;
+  lastInteractionAtMs: number;
+  lastInteractionType: "pointer" | "gyro" | null;
+  isGyroActive: boolean;
 }
 
 export interface DomFacade {
@@ -99,6 +102,7 @@ export interface DomFacade {
   setImageRendering: (mode: "pixelated" | "auto") => void;
   getContainerRect: () => DOMRect | null;
   renderMetadata: (item: MetadataItem) => void;
+  getPermissionOverlay: () => HTMLElement | null;
 }
 
 export interface PoseIndex {

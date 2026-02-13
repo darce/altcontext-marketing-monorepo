@@ -55,6 +55,11 @@
   cursor: crosshair;
   touch-action: none;
   box-shadow: $shadow-inset-outline, $shadow-viewer-depth;
+
+  // Fix for mobile Safari: simple overflow:hidden fails if children have
+  // their own compositing layers (which they do via filter/transform).
+  // clip-path creates a hard clip that survives layer promotion.
+  clip-path: circle(50%);
 }
 
 .face-pose-viewer::after {
@@ -74,7 +79,11 @@
   max-width: none !important;
   max-height: none !important;
   transform-origin: 0 0;
-  will-change: transform;
+
+  // REMOVED will-change: transform
+  // It promoted this element to a GPU layer, breaking the parent's overflow: hidden
+  // on mobile Safari. The SVG filter we're adding will likely promote it anyway,
+  // but the parent's new clip-path: circle(50%) handles that case robustness.
   z-index: 1;
   display: block; // keep it in layout pipeline
   pointer-events: none;
@@ -99,11 +108,9 @@
 }
 
 // Alignment classes (applied via JS)
-.face-pose-viewer img {
-  // Base state
-}
+// .face-pose-viewer img { }
 
-/* Method: Multi-layer approach for two specific colors */
+/* Method: SVG Filter for robust duotone (works across compositing boundaries) */
 .duotone {
   position: relative;
   display: inline-block;
@@ -115,29 +122,11 @@
   width: 100%;
   position: relative;
   z-index: 1;
-  filter: grayscale(100%) contrast(1.8); /* Step 1: Neutral base */
+
+  // Input image -> Grayscale -> Contrast -> Duotone Map
+  // We use a specific SVG filter ID injected in index.html
+  filter: url("#duotone-filter");
 }
 
-.duotone::before,
-.duotone::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 2;
-  pointer-events: none;
-}
-
-.duotone::before {
-  background-color: $color-duotone-shadow; /* Shadow tone */
-  opacity: $opacity-duotone-shadow;
-  mix-blend-mode: multiply; /* Darkens shadows */
-}
-
-.duotone::after {
-  background-color: $color-duotone-highlight; /* Highlight tone */
-  opacity: $opacity-duotone-highlight;
-  mix-blend-mode: screen; /* Lightens highlights */
-}
+// Old pseudo-element method removed because mix-blend-mode fails on mobile
+// when the target element is on its own compositing layer (which it is).

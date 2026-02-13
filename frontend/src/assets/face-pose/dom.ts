@@ -16,6 +16,7 @@ export const createDomFacade = (): DomFacade => {
   const loader = document.getElementById(SELECTORS.loader);
   const metadataPanel = document.getElementById(SELECTORS.metadataPanel);
   const metadataTitle = document.getElementById(SELECTORS.metadataTitle);
+  const permissionOverlay = document.getElementById("pose-permission-overlay");
 
   const hasRequiredNodes =
     faceContainer instanceof HTMLElement &&
@@ -101,5 +102,7 @@ export const createDomFacade = (): DomFacade => {
     setImageRendering,
     getContainerRect,
     renderMetadata,
+    getPermissionOverlay: () =>
+      permissionOverlay instanceof HTMLElement ? permissionOverlay : null,
   };
 };

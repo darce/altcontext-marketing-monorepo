@@ -1,4 +1,9 @@
-import { POINTER_NOISE_CONFIG, POSE_CONFIG, PRELOAD_CONFIG } from "./config";
+import {
+  GYRO_CONFIG,
+  POINTER_NOISE_CONFIG,
+  POSE_CONFIG,
+  PRELOAD_CONFIG,
+} from "./config";
 import { createDomFacade } from "./dom";
 import { loadMetadata, loadPoseBounds } from "./metadata";
 import { createPoseIndex } from "./pose-index";
@@ -199,6 +204,9 @@ const createRuntimeState = (): RuntimeState => ({
   lastPointerAtMs: 0,
   pointerVelocityDegPerMs: 0,
   lastHintAtMs: 0,
+  lastInteractionAtMs: 0,
+  lastInteractionType: null,
+  isGyroActive: false,
 });
 
 const toPoseFromPointer = (
@@ -416,6 +424,12 @@ const initializeFacePose = async (): Promise<void> => {
       }
       state.lastPointerPose = pose;
       state.lastPointerAtMs = now;
+
+      // Coordination: Prioritize direct pointer interaction.
+      // Mark activity and disable gyro if it was active recently.
+      state.lastInteractionAtMs = now;
+      state.lastInteractionType = "pointer";
+
       commandQueue.enqueue(pose.yaw, pose.pitch);
       scheduleCacheWarmHint(metadata, state, pose, now);
     });
@@ -423,6 +437,126 @@ const initializeFacePose = async (): Promise<void> => {
 
   const initialPose = pickInitialPose(metadata, poseBounds);
   commandQueue.enqueue(initialPose.yaw, initialPose.pitch);
+
+  // --- Gyroscope / Device Orientation ---
+  // iOS 13+ requires permission. Others might work automatically or not at all.
+  const permissionOverlay = dom.getPermissionOverlay();
+  const hasOrientationSupport =
+    typeof window !== "undefined" && "DeviceOrientationEvent" in window;
+
+  if (hasOrientationSupport && permissionOverlay) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const DeviceOrientation = window.DeviceOrientationEvent as any;
+    const requiresPermission =
+      typeof DeviceOrientation.requestPermission === "function";
+
+    let lastGyroPose: PoseCommand | null = null;
+    let gyroEventCount = 0;
+    let gyroDetectionTimeout: number | undefined;
+
+    const onOrientation = (event: DeviceOrientationEvent) => {
+      const now = nowMs();
+
+      // Coordination: If user is interacting via pointer recently, ignore gyro
+      if (
+        state.lastInteractionType === "pointer" &&
+        now - state.lastInteractionAtMs <
+          GYRO_CONFIG.interactionCoordinationThresholdMs
+      ) {
+        return;
+      }
+
+      const gamma = event.gamma ?? 0; // Left/Right tilt (-90 to 90)
+      const beta = event.beta ?? 0; // Front/Back tilt (-180 to 180)
+
+      // 1. Normalization & Mapping
+      // Normalize gamma (-GYRO_CONFIG.gammaMaxAbs ... GYRO_CONFIG.gammaMaxAbs) to 0...1
+      const normalizedGamma =
+        (clamp(gamma, -GYRO_CONFIG.gammaMaxAbs, GYRO_CONFIG.gammaMaxAbs) +
+          GYRO_CONFIG.gammaMaxAbs) /
+        (2 * GYRO_CONFIG.gammaMaxAbs);
+      const yaw = mapUnitToRange(
+        normalizedGamma,
+        poseBounds.minYaw,
+        poseBounds.maxYaw,
+      );
+
+      // Normalize beta around the offset
+      const pitch = clamp(
+        beta - GYRO_CONFIG.betaOffset,
+        poseBounds.minPitch,
+        poseBounds.maxPitch,
+      );
+
+      // 2. Noise & Delta Filtering
+      if (lastGyroPose) {
+        const yawDelta = Math.abs(yaw - lastGyroPose.yaw);
+        const pitchDelta = Math.abs(pitch - lastGyroPose.pitch);
+        if (
+          yawDelta < GYRO_CONFIG.minPoseDeltaToUpdate &&
+          pitchDelta < GYRO_CONFIG.minPoseDeltaToUpdate
+        ) {
+          return;
+        }
+      }
+
+      // Feature detection: First few events confirm gyro is actually moving/present
+      gyroEventCount++;
+      if (gyroEventCount > 1) {
+        state.isGyroActive = true;
+        state.lastInteractionType = "gyro";
+        state.lastInteractionAtMs = now;
+        if (gyroDetectionTimeout !== undefined) {
+          clearTimeout(gyroDetectionTimeout);
+          gyroDetectionTimeout = undefined;
+        }
+        permissionOverlay.style.display = "none";
+      }
+
+      lastGyroPose = { yaw, pitch };
+      commandQueue.enqueue(yaw, pitch);
+    };
+
+    const enableMotion = async () => {
+      try {
+        if (requiresPermission) {
+          const response = await DeviceOrientation.requestPermission();
+          if (response !== "granted") {
+            return;
+          }
+        }
+
+        window.addEventListener("deviceorientation", onOrientation);
+
+        // Timeout to hide overlay if no events actually arrive (e.g. desktop)
+        gyroDetectionTimeout = window.setTimeout(() => {
+          if (gyroEventCount < 2) {
+            permissionOverlay.style.display = "none";
+          }
+        }, GYRO_CONFIG.noEventTimeoutMs);
+      } catch (e) {
+        console.warn("DeviceOrientation permission failed", e);
+        permissionOverlay.style.display = "none";
+      }
+    };
+
+    if (requiresPermission) {
+      // Show overlay to request permission on tap
+      permissionOverlay.style.display = "flex";
+      permissionOverlay.addEventListener(
+        "click",
+        (e) => {
+          // Stop propagation so container pointerdown doesn't capture immediately
+          e.stopPropagation();
+          void enableMotion();
+        },
+        { once: true },
+      );
+    } else {
+      // Just try to enable automatically
+      void enableMotion();
+    }
+  }
 
   if (preloadPlan.backgroundStages.length > 0) {
     const runBackgroundPreload = async (): Promise<void> => {
