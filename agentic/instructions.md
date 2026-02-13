@@ -12,7 +12,7 @@ Goal: load only the minimum instruction files required for the current task to r
 ## Cold-Start Load Protocol
 
 1. **Always load** the shared context file:
-   - [`01-context-and-architecture.md`](./instructions/01-context-and-architecture.md) — monorepo layout, hosting model
+   - [`context-and-architecture.md`](./instructions/context-and-architecture.md) — monorepo layout, hosting model
 2. **Determine the task domain** (frontend, backend, or both) from the user's request.
 3. **Load the domain-specific set** (see routing table below).
 4. **Add shared files only when relevant** — language standards, verification conventions, or tool inventory.
@@ -33,7 +33,7 @@ Goal: load only the minimum instruction files required for the current task to r
 | [`frontend/local-development.md`](./instructions/frontend/local-development.md) | Apache config, local dev URL |
 | [`frontend/language-standards.md`](./instructions/frontend/language-standards.md) | Python offline-scripts, pipeline module pattern |
 | [`frontend/verification.md`](./instructions/frontend/verification.md) | Quality gates, Lighthouse, derivative validation |
-| [`07-language-standards.md`](./instructions/07-language-standards.md) | TypeScript standards (shared) |
+| [`language-standards.md`](./instructions/language-standards.md) | TypeScript standards (shared) |
 
 ### Backend tasks
 
@@ -43,8 +43,8 @@ Goal: load only the minimum instruction files required for the current task to r
 |------|------|
 | [`backend/service-rules.md`](./instructions/backend/service-rules.md) | Always for backend tasks — API, Makefile, Fly.io, compliance |
 | [`backend/verification.md`](./instructions/backend/verification.md) | Quality gates, deploy checks |
-| [`09-available-tools.md`](./instructions/09-available-tools.md) | flyctl reference, Homebrew inventory |
-| [`07-language-standards.md`](./instructions/07-language-standards.md) | TypeScript standards (shared) |
+| [`available-tools.md`](./instructions/available-tools.md) | flyctl reference, Homebrew inventory |
+| [`language-standards.md`](./instructions/language-standards.md) | TypeScript standards (shared) |
 
 ### Cross-domain tasks
 
@@ -52,7 +52,7 @@ Goal: load only the minimum instruction files required for the current task to r
 
 | File | When |
 |------|------|
-| [`08-verification-and-agent-roe.md`](./instructions/08-verification-and-agent-roe.md) | Tool-calling conventions, target naming, agent rules |
+| [`verification-and-agent-roe.md`](./instructions/verification-and-agent-roe.md) | Tool-calling conventions, target naming, agent rules |
 
 ## Hard Invariants (Always Apply)
 
@@ -65,10 +65,10 @@ Goal: load only the minimum instruction files required for the current task to r
 
 ### Shared (root)
 
-- [`01-context-and-architecture.md`](./instructions/01-context-and-architecture.md)
-- [`07-language-standards.md`](./instructions/07-language-standards.md)
-- [`08-verification-and-agent-roe.md`](./instructions/08-verification-and-agent-roe.md)
-- [`09-available-tools.md`](./instructions/09-available-tools.md)
+- [`context-and-architecture.md`](./instructions/context-and-architecture.md)
+- [`language-standards.md`](./instructions/language-standards.md)
+- [`verification-and-agent-roe.md`](./instructions/verification-and-agent-roe.md)
+- [`available-tools.md`](./instructions/available-tools.md)
 
 ### Frontend
 

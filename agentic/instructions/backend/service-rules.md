@@ -13,6 +13,9 @@ The canonical entry point for all backend tooling is `backend/Makefile`. All mul
 make -C backend dev              # start local Postgres + server with watch
 make -C backend stop             # stop local Postgres
 make -C backend check            # typecheck + lint + format
+make -C backend audit            # check + dead-exports + duplicates (full)
+make -C backend dead-exports     # find exports with zero consumers (ts-prune)
+make -C backend duplicates       # detect copy-paste clones (jscpd)
 make -C backend migrate          # create + apply a dev migration (Prisma)
 make -C backend db-reset         # drop, recreate, re-migrate
 make -C backend db-studio        # open Prisma Studio
@@ -58,7 +61,7 @@ Prefer Make targets over raw npm scripts for workflows that involve multiple ste
 
 ## Deployment (Fly.io)
 
-The backend deploys to Fly.io. Full flyctl patterns, anti-patterns, and command reference are in [`../09-available-tools.md`](../09-available-tools.md#flyctl-flyio-cli). All deploy workflows go through the Makefile:
+The backend deploys to Fly.io. Full flyctl patterns, anti-patterns, and command reference are in [`../available-tools.md`](../available-tools.md#flyctl-flyio-cli). All deploy workflows go through the Makefile:
 
 ```sh
 make -C backend fly-launch        # first-time scaffold

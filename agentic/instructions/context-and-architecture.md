@@ -18,10 +18,10 @@
 ./agentic/
   instructions.md                     # agent cold-start router
   instructions/
-    01-context-and-architecture.md    # this file — shared context
-    07-language-standards.md          # shared TypeScript standards
-    08-verification-and-agent-roe.md  # tool-calling conventions, agent rules
-    09-available-tools.md             # Homebrew inventory + flyctl reference
+    context-and-architecture.md    # this file — shared context
+    language-standards.md          # shared TypeScript standards
+    verification-and-agent-roe.md  # tool-calling conventions, agent rules
+    available-tools.md             # Homebrew inventory + flyctl reference
     frontend/                         # frontend-only instructions
       architecture.md
       performance-and-budgets.md
