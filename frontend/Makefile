@@ -197,33 +197,19 @@ ci: install  ## Full CI pipeline: build + typecheck + lint + stylelint + format
 # ---------------------------------------------------------------------------
 .PHONY: deploy deploy-full
 
-deploy: build verify-dist  ## Fast deploy: no data pipeline recrop
-	@echo "== Deploying frontend/dist to GitHub Pages =="
-	$(eval DEPLOY_TMP := $(shell mktemp -d))
-	cp -R $(DIST)/ $(DEPLOY_TMP)/dist
-	git checkout gh-pages
-	rm -rf $(DIST)
-	cp -R $(DEPLOY_TMP)/dist $(DIST)
-	rm -rf $(DEPLOY_TMP)
-	git add $(DIST)/
+deploy: build verify-dist  ## Fast deploy: commit dist + push main → GitHub Actions Pages
+	@echo "== Deploying frontend/dist via GitHub Actions =="
+	git add -f $(DIST)/
 	git commit -m "deploy: $$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
-	git push origin gh-pages
-	git checkout -
-	@echo "== Deploy complete =="
+	git push origin main
+	@echo "== Pushed to main — GitHub Actions will deploy to Pages =="
 
-deploy-full: build-full verify-dist  ## Full deploy: data pipeline + assets
-	@echo "== Deploying frontend/dist to GitHub Pages =="
-	$(eval DEPLOY_TMP := $(shell mktemp -d))
-	cp -R $(DIST)/ $(DEPLOY_TMP)/dist
-	git checkout gh-pages
-	rm -rf $(DIST)
-	cp -R $(DEPLOY_TMP)/dist $(DIST)
-	rm -rf $(DEPLOY_TMP)
-	git add $(DIST)/
+deploy-full: build-full verify-dist  ## Full deploy: data pipeline + commit dist + push main
+	@echo "== Deploying frontend/dist via GitHub Actions =="
+	git add -f $(DIST)/
 	git commit -m "deploy: $$(date -u +%Y-%m-%dT%H:%M:%SZ)" || true
-	git push origin gh-pages
-	git checkout -
-	@echo "== Deploy complete =="
+	git push origin main
+	@echo "== Pushed to main — GitHub Actions will deploy to Pages =="
 
 # ---------------------------------------------------------------------------
 # Help
