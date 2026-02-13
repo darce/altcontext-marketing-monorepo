@@ -2,7 +2,7 @@
   // src/assets/face-pose/config.ts
   var SELECTORS = {
     container: "face-container",
-    scrubSurface: "body",
+    scrubSurface: "main.container",
     image: "face-image",
     loader: "face-loader",
     metadataPanel: "face-metadata",
@@ -299,10 +299,6 @@ roll: ${item.pose.roll}`;
     };
     image.onload = () => {
       cleanup();
-      if (typeof image.decode === "function") {
-        image.decode().catch(() => void 0).finally(() => resolve(true));
-        return;
-      }
       resolve(true);
     };
     image.onerror = () => {
@@ -428,8 +424,13 @@ roll: ${item.pose.roll}`;
     const highStage = Array.from(
       new Set(metadata.map((item) => toVariantSource(item, "high")))
     ).filter((source) => !usedSources.has(source));
-    const upgradeStages = [midStage, highStage].filter((stage) => stage.length > 0);
-    return { blockingSources, backgroundStages: [...backgroundStages, ...upgradeStages] };
+    const upgradeStages = [midStage, highStage].filter(
+      (stage) => stage.length > 0
+    );
+    return {
+      blockingSources,
+      backgroundStages: [...backgroundStages, ...upgradeStages]
+    };
   };
 
   // src/assets/face-pose/pose-index.ts
@@ -550,7 +551,10 @@ roll: ${item.pose.roll}`;
       if (scoredCandidates.length === 0) {
         return metadata[0];
       }
-      const poolSize = Math.min(scoredCandidates.length, POSE_CONFIG.candidatePoolSize);
+      const poolSize = Math.min(
+        scoredCandidates.length,
+        POSE_CONFIG.candidatePoolSize
+      );
       const pool = scoredCandidates.slice(0, poolSize);
       const minScore = pool[0].score;
       let totalWeight = 0;
@@ -600,7 +604,9 @@ roll: ${item.pose.roll}`;
       const targetRoll = estimateTargetRoll(candidates, yaw, pitch);
       const poseCellKey = toPoseCellKey(yaw, pitch, POSE_CONFIG.poseCellStep);
       const inSameCell = state.poseCellKey === poseCellKey;
-      const currentStillCandidate = state.currentItem && candidates.some((candidate) => candidate.file === state.currentItem?.file);
+      const currentStillCandidate = state.currentItem && candidates.some(
+        (candidate) => candidate.file === state.currentItem?.file
+      );
       if (inSameCell && state.currentItem && currentStillCandidate && (candidates.length === 1 || nowMs() - state.lastSwitchAt < POSE_CONFIG.sameCellMinSwitchIntervalMs || Math.random() >= POSE_CONFIG.sameCellExploreChance)) {
         return state.currentItem;
       }
@@ -709,7 +715,10 @@ roll: ${item.pose.roll}`;
         if (token !== state.token || !state.currentItem) {
           return;
         }
-        const resolved = resolveImageSource(state.currentItem, state.loadedSources);
+        const resolved = resolveImageSource(
+          state.currentItem,
+          state.loadedSources
+        );
         if (resolved.source !== source) {
           return;
         }
@@ -814,7 +823,9 @@ roll: ${item.pose.roll}`;
       minPitch = Math.min(minPitch, item.pose.pitch);
       maxPitch = Math.max(maxPitch, item.pose.pitch);
       const yawCell = Math.round(item.pose.yaw / POSE_CONFIG.coverageCellStep);
-      const pitchCell = Math.round(item.pose.pitch / POSE_CONFIG.coverageCellStep);
+      const pitchCell = Math.round(
+        item.pose.pitch / POSE_CONFIG.coverageCellStep
+      );
       const cellKey = `${yawCell}:${pitchCell}`;
       const existing = coverageByCell.get(cellKey);
       if (existing) {
@@ -847,8 +858,16 @@ roll: ${item.pose.roll}`;
         denseMaxPitch = Math.max(denseMaxPitch, densePitch);
       }
       if (Number.isFinite(denseMinYaw) && Number.isFinite(denseMaxYaw) && Number.isFinite(denseMinPitch) && Number.isFinite(denseMaxPitch)) {
-        minYaw = clamp(denseMinYaw, -POSE_CONFIG.maxAbsYaw, POSE_CONFIG.maxAbsYaw);
-        maxYaw = clamp(denseMaxYaw, -POSE_CONFIG.maxAbsYaw, POSE_CONFIG.maxAbsYaw);
+        minYaw = clamp(
+          denseMinYaw,
+          -POSE_CONFIG.maxAbsYaw,
+          POSE_CONFIG.maxAbsYaw
+        );
+        maxYaw = clamp(
+          denseMaxYaw,
+          -POSE_CONFIG.maxAbsYaw,
+          POSE_CONFIG.maxAbsYaw
+        );
         minPitch = clamp(
           denseMinPitch,
           -POSE_CONFIG.maxAbsPitch,
@@ -872,8 +891,16 @@ roll: ${item.pose.roll}`;
     const yawPad = (maxYaw - minYaw) * POSE_CONFIG.poseBoundsPaddingRatio;
     const pitchPad = (maxPitch - minPitch) * POSE_CONFIG.poseBoundsPaddingRatio;
     return {
-      minYaw: clamp(minYaw - yawPad, -POSE_CONFIG.maxAbsYaw, POSE_CONFIG.maxAbsYaw),
-      maxYaw: clamp(maxYaw + yawPad, -POSE_CONFIG.maxAbsYaw, POSE_CONFIG.maxAbsYaw),
+      minYaw: clamp(
+        minYaw - yawPad,
+        -POSE_CONFIG.maxAbsYaw,
+        POSE_CONFIG.maxAbsYaw
+      ),
+      maxYaw: clamp(
+        maxYaw + yawPad,
+        -POSE_CONFIG.maxAbsYaw,
+        POSE_CONFIG.maxAbsYaw
+      ),
       minPitch: clamp(
         minPitch - pitchPad,
         -POSE_CONFIG.maxAbsPitch,
@@ -966,7 +993,11 @@ roll: ${item.pose.roll}`;
     if (now - state.lastHintAtMs < CACHE_HINT_INTERVAL_MS) {
       return;
     }
-    const hintSources = collectQuadrantHintSources(metadata, pose, state.loadedSources);
+    const hintSources = collectQuadrantHintSources(
+      metadata,
+      pose,
+      state.loadedSources
+    );
     if (hintSources.length === 0) {
       return;
     }
@@ -997,28 +1028,28 @@ roll: ${item.pose.roll}`;
       return;
     }
     const preloadPlan = createPreloadPlan(metadata);
-    if (PRELOAD_CONFIG.blockUntilComplete) {
-      let lastProgressValue = -1;
-      const preloadResult = await preloadImages(
-        preloadPlan.blockingSources,
-        PRELOAD_CONFIG.maxConcurrent,
-        (summary) => {
-          const progressValue = summary.loaded + summary.failed;
-          if (progressValue === lastProgressValue) {
-            return;
-          }
-          lastProgressValue = progressValue;
-          dom.setLoaderText(`Preloading images... ${progressValue}/${summary.total}`);
-        },
-        (source) => {
-          state.loadedSources.add(source);
+    let lastProgressValue = -1;
+    const preloadResult = await preloadImages(
+      preloadPlan.blockingSources,
+      PRELOAD_CONFIG.maxConcurrent,
+      (summary) => {
+        const progressValue = summary.loaded + summary.failed;
+        if (progressValue === lastProgressValue) {
+          return;
         }
-      );
-      if (preloadResult.failed > 0) {
-        console.warn(
-          `Image preload completed with ${preloadResult.failed} failed requests.`
+        lastProgressValue = progressValue;
+        dom.setLoaderText(
+          `Preloading images... ${progressValue}/${summary.total}`
         );
+      },
+      (source) => {
+        state.loadedSources.add(source);
       }
+    );
+    if (preloadResult.failed > 0) {
+      console.warn(
+        `Image preload completed with ${preloadResult.failed} failed requests.`
+      );
     }
     const poseIndex = createPoseIndex(metadata);
     const derivedPoseBounds = derivePoseBounds(metadata);
@@ -1036,8 +1067,14 @@ roll: ${item.pose.roll}`;
     state.phase = "ready";
     const { updateFace } = createFaceUpdater(dom, state, poseIndex);
     const commandQueue = createPoseCommandQueue(state, updateFace);
-    if (dom.container) {
-      dom.container.addEventListener("mousemove", (event) => {
+    const container = dom.container;
+    if (container) {
+      container.addEventListener("pointerdown", (event) => {
+        if (event.pointerType !== "mouse") {
+          container.setPointerCapture(event.pointerId);
+        }
+      });
+      container.addEventListener("pointermove", (event) => {
         const rect = dom.getContainerRect();
         if (!rect) {
           return;
@@ -1047,7 +1084,9 @@ roll: ${item.pose.roll}`;
         if (state.lastPointerPose && state.lastPointerAtMs > 0) {
           const yawDelta = pose.yaw - state.lastPointerPose.yaw;
           const pitchDelta = pose.pitch - state.lastPointerPose.pitch;
-          const distance = Math.sqrt(yawDelta * yawDelta + pitchDelta * pitchDelta);
+          const distance = Math.sqrt(
+            yawDelta * yawDelta + pitchDelta * pitchDelta
+          );
           const elapsedMs = Math.max(1, now - state.lastPointerAtMs);
           state.pointerVelocityDegPerMs = distance / elapsedMs;
         } else {
