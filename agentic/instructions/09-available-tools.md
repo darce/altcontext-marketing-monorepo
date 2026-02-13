@@ -1,0 +1,243 @@
+# Available Terminal Tools (Homebrew)
+
+This file lists the terminal tools currently installed via Homebrew, available for agentic development.
+
+## Key Development Tools
+
+### flyctl (Fly.io CLI)
+
+Manages Fly.io app lifecycle: deploy, secrets, scaling, Postgres, monitoring.
+
+#### Common Commands
+
+```sh
+fly launch                          # scaffold new Fly app (generates fly.toml + Dockerfile)
+fly deploy                          # build + deploy from fly.toml
+fly secrets set KEY=value           # inject secret as env var (restarts app)
+fly secrets import < .env           # bulk-import dotenv (use --stage to defer restart)
+fly status                          # machine health + region + version
+fly logs                            # tail live logs
+fly ssh console                     # shell into running machine
+fly postgres create                 # provision managed Postgres cluster
+fly postgres attach <pg-app>        # set DATABASE_URL secret on the consumer app
+fly scale count 2                   # horizontal scale
+fly scale vm shared-cpu-1x          # change VM size
+fly checks list                     # health check state
+```
+
+#### Patterns (Do)
+
+- Run `fly launch` from `backend/` — keeps `fly.toml` co-located with the service.
+- Use `fly secrets set` for all credentials; never commit `.env` with real values.
+- Use `fly secrets import < .env --stage` to batch secrets without triggering a restart.
+- Add a `[deploy] release_command` in `fly.toml` for Prisma migrations (`npx prisma migrate deploy`).
+- Set `internal_port` in `fly.toml` `[http_service]` to match the app's listen port (default 3000).
+- Bind the app to `0.0.0.0` (not `localhost`) so `fly-proxy` can reach it.
+- Keep Postgres in the same Fly private network — skip SSL/TLS for internal connections.
+- Use `fly checks list` and `GET /v1/healthz` to verify deploy health before cutting traffic.
+
+#### Anti-patterns (Do Not)
+
+- Do not run `fly launch` from the monorepo root — it would generate config for the wrong directory.
+- Do not hard-code `DATABASE_URL` in source; always read from `process.env`.
+- Do not use `fly deploy --local-only` in CI without a Docker daemon available.
+- Do not skip `release_command` for migrations — manual SSH migration is fragile.
+- Do not allocate a dedicated IPv4 unless you need non-443 public ports (costs extra).
+- Do not store raw PII in Fly logs — ensure structured logging redacts sensitive fields.
+
+### Other Relevant Tools
+
+| Tool | Purpose |
+|------|---------|
+| `docker` / `docker-compose` | Local containerised dev; Fly uses Dockerfile for deploy |
+| `gh` | GitHub CLI — PRs, releases, Actions |
+| `postgresql@17` | Local Postgres for dev/test parity with Fly Managed Postgres |
+| `redis` | Local queue / cache backing (phase 2+) |
+| `ripgrep` | Fast workspace search |
+| `imagemagick` | Image processing (offline scripts) |
+| `ffmpeg` | Media transcoding |
+| `pyenv` / `pyenv-virtualenv` | Python version and venv management for offline-scripts |
+| `fnm` | Fast Node version manager |
+| `deno` | Alternative JS runtime (available, not primary) |
+
+## Installed Formulas
+
+- abseil
+- aom
+- apr
+- apr-util
+- argon2
+- autoconf
+- brotli
+- bzip2
+- ca-certificates
+- cairo
+- certifi
+- cjson
+- cmake
+- colima
+- composer
+- coreutils
+- curl
+- dav1d
+- ddrescue
+- deno
+- docker
+- docker-completion
+- docker-compose
+- erlang
+- expat
+- ffmpeg
+- flyctl
+- fnm
+- fontconfig
+- freetds
+- freetype
+- fribidi
+- gcc
+- gd
+- gettext
+- gh
+- giflib
+- git-crypt
+- git-filter-repo
+- git-lfs
+- glib
+- gmp
+- gnupg
+- gnutls
+- graphite2
+- harfbuzz
+- highway
+- huggingface-cli
+- icu4c@77
+- icu4c@78
+- imagemagick
+- imath
+- isl
+- jpeg-turbo
+- jpeg-xl
+- krb5
+- lame
+- leptonica
+- libarchive
+- libass
+- libassuan
+- libavif
+- libb2
+- libcbor
+- libdatrie
+- libde265
+- libdeflate
+- libevent
+- libfido2
+- libgcrypt
+- libgpg-error
+- libheif
+- libidn2
+- libksba
+- libmicrohttpd
+- libmpc
+- libnghttp2
+- libnghttp3
+- libngtcp2
+- libplacebo
+- libpng
+- libpq
+- librist
+- libsodium
+- libssh2
+- libtasn1
+- libthai
+- libtiff
+- libtool
+- libunibreak
+- libunistring
+- libusb
+- libvmaf
+- libvpx
+- libx11
+- libxau
+- libxcb
+- libxdmcp
+- libxext
+- libxml2
+- libxrender
+- libyaml
+- libzip
+- lima
+- little-cms2
+- llvm
+- lz4
+- lzo
+- m4
+- mbedtls@3
+- mhash
+- mkcert
+- mpdecimal
+- mpfr
+- mysql
+- net-snmp
+- nettle
+- nginx
+- npth
+- oniguruma
+- openexr
+- openjpeg
+- openjph
+- openldap
+- openssl@3
+- opus
+- p11-kit
+- pandoc
+- pango
+- pcre2
+- pgvector
+- php
+- pinentry
+- pipx
+- pixman
+- pkgconf
+- postgresql@17
+- protobuf
+- pyenv
+- pyenv-virtualenv
+- python@3.13
+- python@3.14
+- readline
+- redis
+- ripgrep
+- rtmpdump
+- sdl2
+- shaderc
+- shared-mime-info
+- sqlite
+- subversion
+- svt-av1
+- tesseract
+- testdisk
+- tidy-html5
+- unbound
+- unixodbc
+- utf8proc
+- vapoursynth
+- vulkan-headers
+- vulkan-loader
+- webp
+- wp-cli
+- wxwidgets@3.2
+- x264
+- x265
+- xorgproto
+- xz
+- yt-dlp
+- z3
+- zimg
+- zlib
+- zstd
+
+## Installed Casks
+
+- alfred
+- docker
+- docker-desktop

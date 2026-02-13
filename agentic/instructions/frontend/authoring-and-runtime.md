@@ -43,7 +43,6 @@
 - Load with `defer`.
 - Keep it progressive enhancement only.
 - No third-party script before first paint.
-- Use arrow functions for JS/TS function definitions unless `this` binding requires `function`.
 
 ### Approved Lightweight Patterns
 

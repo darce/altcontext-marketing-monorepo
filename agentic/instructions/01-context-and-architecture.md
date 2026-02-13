@@ -2,57 +2,51 @@
 
 ## Project Context
 
-- Frontend is an MPA-style static site generated into `frontend/dist/`.
-- Backend is a separate service for email capture and marketing intelligence.
-- Marketing pages must remain fast and static-first even when backend integrations are enabled.
-
-## Runtime and Hosting Constraints
-
+- Monorepo with two workspaces: `frontend/` (static marketing site) and `backend/` (email capture + marketing intelligence).
+- Marketing pages must remain fast and static-first; backend is never paint-critical.
 - Build-time tools can use Node.js and Python locally/CI.
-- Deployment artifact for the marketing site is the contents of `frontend/dist/`.
-- Static hosting remains Apache-first.
-- Backend APIs are separate from paint-critical frontend delivery.
+
+## Hosting Model
+
+- Frontend deploys as static files from `frontend/dist/` (Apache-first).
+- Backend deploys to Fly.io as a containerised Node service from `backend/`.
 - No build tool should assume Node/Python runtime is available on the static host.
 
-## Monorepo Architecture
+## Monorepo Layout
 
 ```text
 ./agentic/
-  instructions.md
+  instructions.md                     # agent cold-start router
   instructions/
-    01-context-and-architecture.md
-    02-performance-and-budgets.md
-    03-build-pipeline-and-scripts.md
-    04-frontend-authoring-and-runtime-js.md
-    05-backend-service-rules.md
-    06-local-development-apache.md
-    07-language-standards.md
-    08-verification-and-agent-roe.md
+    01-context-and-architecture.md    # this file — shared context
+    07-language-standards.md          # shared TypeScript standards
+    08-verification-and-agent-roe.md  # tool-calling conventions, agent rules
+    09-available-tools.md             # Homebrew inventory + flyctl reference
+    frontend/                         # frontend-only instructions
+      architecture.md
+      performance-and-budgets.md
+      build-pipeline.md
+      authoring-and-runtime.md
+      local-development.md
+      language-standards.md
+      verification.md
+    backend/                          # backend-only instructions
+      service-rules.md
+      verification.md
 
 ./backend/
   package.json
-  server.js
+  Makefile                            # orchestration: dev, deploy, db, ci
 
 ./frontend/
   package.json
-  tsconfig.tools.json
-  build/
-    copy.ts
-    compress.ts
-    critcss.ts
-    extract-metadata.ts
-    prepare-derivatives.ts
-  styles/
-    site.scss
-    _tokens.scss
-    ...
-  src/
-  public/
-  offline-scripts/
-  dist/
+  Makefile                            # orchestration: build, data, deploy, ci
+  build/                              # build tooling (not shipped to runtime)
+  styles/                             # SCSS source
+  src/                                # runtime source (ships to browser)
+  public/                             # static data assets (metadata, atlases)
+  offline-scripts/                    # Python analysis scripts
+  dist/                               # deploy output
 ```
 
-## Architecture Notes
-
-- `frontend/dist/` is deploy output.
-- `frontend/build/*.ts` are build tools only and are not shipped to runtime.
+Domain-specific file trees are in `frontend/architecture.md` and the backend roadmap respectively.

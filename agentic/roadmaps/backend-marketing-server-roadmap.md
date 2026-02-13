@@ -6,17 +6,16 @@ Last updated: 2026-02-13
 
 - [1. Goals](#1-goals)
 - [2. Project Constraints](#2-project-constraints)
-- [3. Recommended Stack (Decision)](#3-recommended-stack-decision)
+- [3. Stack](#3-stack)
 - [4. System Architecture](#4-system-architecture)
 - [5. Data Model (MVP)](#5-data-model-mvp)
 - [6. Visitor IP and Email Association Strategy](#6-visitor-ip-and-email-association-strategy)
 - [7. API Contract (MVP)](#7-api-contract-mvp)
-- [8. Marketing Metrics for a Bootstrap SaaS](#8-marketing-metrics-for-a-bootstrap-saas)
-- [9. Security, Privacy, and Retention](#9-security-privacy-and-retention)
-- [10. Fly.io Deployment Plan](#10-flyio-deployment-plan)
+- [8. Marketing Metrics](#8-marketing-metrics)
+- [9. Security, Privacy, Compliance, and Retention](#9-security-privacy-compliance-and-retention)
+- [10. Fly.io Deployment](#10-flyio-deployment)
 - [11. Delivery Phases](#11-delivery-phases)
-- [12. DB Choice: Postgres vs MySQL vs MongoDB](#12-db-choice-postgres-vs-mysql-vs-mongodb)
-- [13. Acceptance Checklist](#13-acceptance-checklist)
+- [12. Acceptance Checklist](#12-acceptance-checklist)
 
 ## 1. Goals
 
@@ -40,26 +39,17 @@ These constraints are aligned with:
 - `agentic/instructions/01-context-and-architecture.md`
 - `agentic/instructions/05-backend-service-rules.md`
 
-## 3. Recommended Stack (Decision)
+## 3. Stack
 
-**Decision:** Use **PostgreSQL + Prisma + TypeScript Node API**.
-
-### Proposed stack
+PostgreSQL + Prisma + TypeScript Node API.
 
 - Runtime: Node.js 20 + TypeScript
-- API framework: Fastify (or Express if team preference)
-- ORM/migrations: Prisma
-- Database: PostgreSQL
+- API framework: Fastify
+- ORM / migrations: Prisma
+- Database: PostgreSQL (Fly Managed Postgres)
 - Validation: Zod
-- Queue (phase 2+): Redis or Postgres-backed jobs (start simple)
+- Queue (phase 2+): Postgres-backed jobs → Redis if needed
 - Observability: OpenTelemetry + structured JSON logs
-
-### Why this stack
-
-- Your problem is relational: visitors, sessions, events, forms, campaigns, and identities need reliable joins.
-- Durable event ingestion benefits from ACID and mature indexing.
-- Prisma gives fast iteration with type-safe queries and migrations.
-- PostgreSQL has strong durability and recovery characteristics and fits both OLTP and moderate analytics workloads.
 
 ## 4. System Architecture
 
@@ -179,64 +169,111 @@ frontend/dist (static pages)
 - Purpose: return daily rollups for dashboard.
 - Protection: admin auth or private network only.
 
-## 8. Marketing Metrics for a Bootstrap SaaS
+## 8. Marketing Metrics
 
-### Start with these 12 metrics
+### MVP Metrics
 
-- Unique visitors (daily/weekly)
-- Returning visitors %
-- Traffic source mix (`utm_source`/referrer)
-- Landing page conversion rate (page view -> form submit)
-- Form start -> form submit completion rate
+- Unique visitors (daily/weekly), returning visitors %
+- Traffic source mix (`utm_source` / referrer)
+- Landing page conversion rate (page view → form submit)
+- Form completion rate (start → submit)
 - Lead capture rate (unique emails / unique visitors)
-- Email verification rate (if verification enabled)
-- Cost per lead (when ad spend exists)
-- Time-to-first-capture (from first visit to email)
-- Lead-to-signup rate (if product signup exists)
-- Lead-to-activation rate (if product activation event exists)
+- Time-to-first-capture (first visit → email)
 - API ingestion reliability (event success %, p95 latency)
 
-### Add in phase 3+
+### Phase 3+
 
-- Cohort conversion (by week/source)
-- Assisted conversion paths (multi-touch)
-- Domain quality segmentation (free vs business domains)
-- Bot/spam score trend
+- Cohort conversion, multi-touch attribution
+- Domain quality segmentation (free vs business)
+- Cost per lead (when ad spend exists)
 
-## 9. Security, Privacy, and Retention
+## 9. Security, Privacy, Compliance, and Retention
 
-- Add rate limiting on write endpoints.
-- Add bot checks (honeypot + optional Turnstile/Recaptcha at form endpoint).
-- Encrypt secrets and DB URL via Fly secrets.
-- Keep PII minimal; hash where feasible.
-- Document retention:
-  - events raw: 90 days (example)
-  - rollups: 24 months
-  - raw IP: 0-7 days (optional)
-- Provide delete-by-email workflow for compliance operations.
+### Security Baseline
 
-## 10. Fly.io Deployment Plan
+- Rate limiting on write endpoints.
+- Bot checks: honeypot + optional Turnstile/reCAPTCHA at form endpoint.
+- All secrets via `fly secrets set` — never commit real credentials.
+- PII kept minimal; hash where feasible (`HMAC_SHA256(ip, pepper)`).
 
-### Infrastructure shape
+### Data Retention
+
+| Data | Retention | Notes |
+|------|-----------|-------|
+| Raw events | 90 days | then purge or archive |
+| Rollups / aggregates | 24 months | |
+| Raw IP | 0–7 days | abuse controls only |
+| Raw email | until deletion request | see compliance |
+
+### Canadian Jurisdiction Compliance
+
+The service operates under Canadian law. Two federal statutes govern data handling:
+
+#### PIPEDA (Personal Information Protection and Electronic Documents Act)
+
+- **Consent**: Obtain meaningful consent before collecting, using, or disclosing personal information. Implied consent is acceptable for non-sensitive data when the purpose is obvious (e.g. analytics cookies).
+- **Purpose limitation**: State why data is collected at or before the time of collection. Do not repurpose without fresh consent.
+- **Minimisation**: Collect only what is necessary. Hash IPs; do not store raw IP longer than required for abuse controls.
+- **Retention and disposal**: Define retention periods (see table above). Implement automated purge jobs. Provide a delete-by-email workflow so individuals can exercise their right to erasure.
+- **Safeguards**: Encrypt data at rest (Fly Managed Postgres encryption) and in transit (TLS). Restrict DB access to the Fly private network.
+- **Accountability**: Designate a privacy contact. Document data flows and retention policies in an internal privacy log.
+- **Breach notification**: Mandatory notification to the Office of the Privacy Commissioner of Canada (OPC) and affected individuals if a breach creates a "real risk of significant harm".
+
+#### CASL (Canada's Anti-Spam Legislation)
+
+- **Express consent required** before sending any commercial electronic message (CEM) — marketing emails, drip sequences, promotional notifications.
+- **Implied consent** is time-limited (6 months from inquiry, 24 months from existing business relationship). Track consent timestamps per lead.
+- **Required message content**: sender identity, mailing address, functional unsubscribe mechanism processed within 10 business days.
+- **Record keeping**: store the method, time, and purpose of each consent grant. The `leads.consent_status` field and a `consent_events` audit log satisfy this.
+- **No purchased lists**: only email addresses obtained with direct consent may receive CEMs.
+
+#### Implementation Checklist
+
+- [ ] Consent capture UI with clear purpose statement on every form.
+- [ ] `consent_status` enum: `pending`, `express`, `implied`, `withdrawn`.
+- [ ] `consent_events` audit table: `lead_id`, `status`, `source`, `timestamp`, `ip_hash`.
+- [ ] Unsubscribe endpoint (`POST /v1/leads/unsubscribe`) that sets `consent_status = withdrawn` within 10 business days (implement immediately).
+- [ ] Automated retention purge job (raw events > 90 days, raw IP > 7 days).
+- [ ] Delete-by-email endpoint or admin command for PIPEDA erasure requests.
+- [ ] Privacy contact documented in project README.
+
+## 10. Fly.io Deployment
+
+### Infrastructure
 
 - One Fly app for backend API (`backend/`).
-- One Postgres cluster (prefer managed for durability).
-- Single region initially (near primary audience), scale later.
+- One Fly Managed Postgres cluster, same region.
+- Single region initially (`yyz` — Toronto, or nearest Canadian region); scale later.
 
-### Initial deployment steps
+### Deployment Steps
 
-1. `cd backend`
-2. `fly launch` (app creation)
-3. Provision Postgres (managed or attached cluster)
-4. `fly secrets set DATABASE_URL=...`
-5. Deploy: `fly deploy`
-6. Run migrations in release command or one-off job
+1. `cd backend && fly launch` — generates `fly.toml` + Dockerfile.
+2. `fly postgres create --region yul` → `fly postgres attach <pg-app>`.
+3. `fly secrets set SESSION_SECRET=... IP_HASH_PEPPER=...`
+4. Add `[deploy] release_command = "npx prisma migrate deploy"` to `fly.toml`.
+5. Ensure `internal_port` in `[http_service]` matches the app listen port, bind `0.0.0.0`.
+6. `fly deploy`.
+7. `fly checks list` to verify health.
 
-### Reliability baseline
+### `fly.toml` Essentials
 
-- Health check endpoint required.
-- At least one daily backup and tested restore workflow.
-- Alerting for error rate, p95 latency, DB storage, and failed migrations.
+```toml
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+
+[deploy]
+  release_command = "npx prisma migrate deploy"
+```
+
+### Reliability
+
+- `GET /v1/healthz` registered as Fly HTTP check.
+- Daily Postgres backup + tested restore.
+- Alerting on error rate, p95 latency, DB storage, failed migrations.
 
 ## 11. Delivery Phases
 
@@ -265,45 +302,26 @@ frontend/dist (static pages)
 - Add cohort reports.
 - Add data quality monitors and auto-clean tasks.
 
-## 12. DB Choice: Postgres vs MySQL vs MongoDB
-
-### Recommendation
-
-- Use **PostgreSQL** for this project.
-
-### Why Postgres wins here
-
-- Best fit for relational identity stitching and funnel queries.
-- Strong durability/recovery primitives.
-- JSONB support for flexible event payloads without abandoning relational structure.
-- Excellent tooling for analytics-style SQL as your dataset grows.
-
-### MySQL
-
-- Viable and durable with InnoDB, but less ergonomic for mixed relational + event-json analytics compared to Postgres for this use case.
-
-### MongoDB
-
-- Flexible documents, but your core problem needs reliable joins and attribution logic.
-- Transaction model and operational constraints can add complexity for this specific workload.
-
-## 13. Acceptance Checklist
+## 12. Acceptance Checklist
 
 - [ ] Backend service in `backend/` deployed to Fly and reachable.
 - [ ] `POST /v1/events` ingests telemetry with server-side IP/UA hashing.
-- [ ] `POST /v1/leads/capture` captures emails and links to visitor identity.
+- [ ] `POST /v1/leads/capture` captures emails with consent, links to visitor identity.
+- [ ] `POST /v1/leads/unsubscribe` withdraws consent and is processed immediately.
 - [ ] Frontend form works both with JS and no-JS fallback.
-- [ ] Dashboard summary endpoint returns the 12 core bootstrap metrics.
+- [ ] Dashboard summary endpoint returns MVP metrics.
 - [ ] Rate limiting and spam controls enabled on write endpoints.
-- [ ] Retention/deletion workflows defined and tested.
-- [ ] Backup + restore test completed successfully.
+- [ ] PIPEDA retention/deletion workflows defined and tested.
+- [ ] CASL consent audit log (`consent_events`) operational.
+- [ ] Backup + restore test completed.
 - [ ] p95 API latency and ingest error budgets documented.
 
 ## References
 
 - Fly JavaScript basics: https://fly.io/docs/js/the-basics/
 - Fly Managed Postgres: https://fly.io/docs/mpg/
-- PostgreSQL WAL and reliability: https://www.postgresql.org/docs/current/wal-intro.html
-- MySQL InnoDB ACID model: https://dev.mysql.com/doc/refman/8.4/en/mysql-acid.html
-- MongoDB transaction production considerations: https://www.mongodb.com/docs/manual/core/transactions-production-consideration/
-- Prisma connection pooling behavior: https://www.prisma.io/docs/concepts/components/prisma-client/working-with-prismaclient/connection-pool
+- Fly secrets management: https://fly.io/docs/apps/secrets/
+- Prisma on Fly (Postgres): https://fly.io/docs/js/prisma/postgres/
+- PIPEDA overview: https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/
+- CASL overview: https://crtc.gc.ca/eng/internet/anti.htm
+- OPC breach reporting: https://www.priv.gc.ca/en/report-a-concern/report-a-privacy-breach-at-your-organization/

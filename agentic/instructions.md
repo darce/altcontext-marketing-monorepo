@@ -11,23 +11,48 @@ Goal: load only the minimum instruction files required for the current task to r
 
 ## Cold-Start Load Protocol
 
-1. Always load:
-   - [`agentic/instructions/01-context-and-architecture.md`](./instructions/01-context-and-architecture.md)
-   - [`agentic/instructions/02-performance-and-budgets.md`](./instructions/02-performance-and-budgets.md)
-2. Then load only the domain files needed for the task (see routing table below).
-3. Avoid loading all instruction files unless the task explicitly spans multiple domains.
+1. **Always load** the shared context file:
+   - [`01-context-and-architecture.md`](./instructions/01-context-and-architecture.md) — monorepo layout, hosting model
+2. **Determine the task domain** (frontend, backend, or both) from the user's request.
+3. **Load the domain-specific set** (see routing table below).
+4. **Add shared files only when relevant** — language standards, verification conventions, or tool inventory.
+5. Avoid loading all instruction files unless the task explicitly spans both domains.
 
 ## Task Routing Table
 
-| Task Type | Load These Files |
-|---|---|
-| Build scripts, npm pipeline, recrop behavior | [`03-build-pipeline-and-scripts.md`](./instructions/03-build-pipeline-and-scripts.md), [`07-language-standards.md`](./instructions/07-language-standards.md) |
-| SCSS, UI, typography, CSS delivery | [`04-frontend-authoring-and-runtime-js.md`](./instructions/04-frontend-authoring-and-runtime-js.md), [`02-performance-and-budgets.md`](./instructions/02-performance-and-budgets.md) |
-| Runtime TS/JS interaction logic | [`04-frontend-authoring-and-runtime-js.md`](./instructions/04-frontend-authoring-and-runtime-js.md), [`07-language-standards.md`](./instructions/07-language-standards.md) |
-| Backend endpoint or integration behavior | [`05-backend-service-rules.md`](./instructions/05-backend-service-rules.md) |
-| Local Apache/dev URL/path issues | [`06-local-development-apache.md`](./instructions/06-local-development-apache.md) |
-| Offline Python scripts | [`07-language-standards.md`](./instructions/07-language-standards.md) |
-| Verification, QA, release checks, acceptance | [`08-verification-and-agent-roe.md`](./instructions/08-verification-and-agent-roe.md), [`02-performance-and-budgets.md`](./instructions/02-performance-and-budgets.md) |
+### Frontend tasks
+
+> Build pipeline, SCSS/CSS, runtime JS, face-pose, derivatives, offline Python scripts, local dev, performance, deploy to GitHub Pages.
+
+| File | When |
+|------|------|
+| [`frontend/architecture.md`](./instructions/frontend/architecture.md) | Always for frontend tasks — file tree, data flow |
+| [`frontend/build-pipeline.md`](./instructions/frontend/build-pipeline.md) | Build scripts, derivatives, atlas, recrop |
+| [`frontend/performance-and-budgets.md`](./instructions/frontend/performance-and-budgets.md) | FCP budgets, critical CSS, async loading |
+| [`frontend/authoring-and-runtime.md`](./instructions/frontend/authoring-and-runtime.md) | SCSS, fonts, images, runtime JS patterns |
+| [`frontend/local-development.md`](./instructions/frontend/local-development.md) | Apache config, local dev URL |
+| [`frontend/language-standards.md`](./instructions/frontend/language-standards.md) | Python offline-scripts, pipeline module pattern |
+| [`frontend/verification.md`](./instructions/frontend/verification.md) | Quality gates, Lighthouse, derivative validation |
+| [`07-language-standards.md`](./instructions/07-language-standards.md) | TypeScript standards (shared) |
+
+### Backend tasks
+
+> API endpoints, Fly.io deploy, DB migrations, Prisma, privacy/compliance, secrets.
+
+| File | When |
+|------|------|
+| [`backend/service-rules.md`](./instructions/backend/service-rules.md) | Always for backend tasks — API, Makefile, Fly.io, compliance |
+| [`backend/verification.md`](./instructions/backend/verification.md) | Quality gates, deploy checks |
+| [`09-available-tools.md`](./instructions/09-available-tools.md) | flyctl reference, Homebrew inventory |
+| [`07-language-standards.md`](./instructions/07-language-standards.md) | TypeScript standards (shared) |
+
+### Cross-domain tasks
+
+> Makefile conventions, tool-calling rules, agent rules of engagement.
+
+| File | When |
+|------|------|
+| [`08-verification-and-agent-roe.md`](./instructions/08-verification-and-agent-roe.md) | Tool-calling conventions, target naming, agent rules |
 
 ## Hard Invariants (Always Apply)
 
@@ -38,11 +63,24 @@ Goal: load only the minimum instruction files required for the current task to r
 
 ## Instruction Modules
 
+### Shared (root)
+
 - [`01-context-and-architecture.md`](./instructions/01-context-and-architecture.md)
-- [`02-performance-and-budgets.md`](./instructions/02-performance-and-budgets.md)
-- [`03-build-pipeline-and-scripts.md`](./instructions/03-build-pipeline-and-scripts.md)
-- [`04-frontend-authoring-and-runtime-js.md`](./instructions/04-frontend-authoring-and-runtime-js.md)
-- [`05-backend-service-rules.md`](./instructions/05-backend-service-rules.md)
-- [`06-local-development-apache.md`](./instructions/06-local-development-apache.md)
 - [`07-language-standards.md`](./instructions/07-language-standards.md)
 - [`08-verification-and-agent-roe.md`](./instructions/08-verification-and-agent-roe.md)
+- [`09-available-tools.md`](./instructions/09-available-tools.md)
+
+### Frontend
+
+- [`frontend/architecture.md`](./instructions/frontend/architecture.md)
+- [`frontend/performance-and-budgets.md`](./instructions/frontend/performance-and-budgets.md)
+- [`frontend/build-pipeline.md`](./instructions/frontend/build-pipeline.md)
+- [`frontend/authoring-and-runtime.md`](./instructions/frontend/authoring-and-runtime.md)
+- [`frontend/local-development.md`](./instructions/frontend/local-development.md)
+- [`frontend/language-standards.md`](./instructions/frontend/language-standards.md)
+- [`frontend/verification.md`](./instructions/frontend/verification.md)
+
+### Backend
+
+- [`backend/service-rules.md`](./instructions/backend/service-rules.md)
+- [`backend/verification.md`](./instructions/backend/verification.md)
