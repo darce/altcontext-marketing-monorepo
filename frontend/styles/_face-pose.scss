@@ -18,6 +18,10 @@
   padding: $space-sm;
   display: flex;
   flex-direction: column;
+
+  @media (width <=30rem) {
+    display: none;
+  }
 }
 
 .face-metadata-header {
@@ -60,6 +64,33 @@
   // their own compositing layers (which they do via filter/transform).
   // clip-path creates a hard clip that survives layer promotion.
   clip-path: circle(50%);
+
+  @media (width <=30rem) {
+    position: fixed;
+    inset: 0;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: 0;
+    clip-path: none;
+    z-index: 0;
+    pointer-events: none;
+    border: none;
+    box-shadow: none;
+
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(
+        to bottom,
+        rgb(0 0 0 / 40%) 0%,
+        rgb(0 0 0 / 20%) 50%,
+        rgb(0 0 0 / 60%) 100%
+      );
+      z-index: 2;
+      pointer-events: none;
+    }
+  }
 }
 
 .face-pose-viewer::after {

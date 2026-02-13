@@ -6,6 +6,15 @@
 @use "email-capture";
 
 // Layout primitives
+@media (width <=30rem) {
+  html,
+  body {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
 body {
   margin: 0;
   padding: 0;
@@ -16,7 +25,16 @@ body {
 }
 
 .container {
+  position: relative;
+  z-index: 1;
   max-width: tokens.$layout-max-width;
   margin: 0 auto;
   padding: tokens.$space-md;
+
+  @media (width <=30rem) {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
 }

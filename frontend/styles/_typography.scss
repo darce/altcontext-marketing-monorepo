@@ -18,16 +18,26 @@
 }
 
 h1 {
-  font-size: 6rem;
+  font-size: clamp(2.5rem, 12vw, 6rem);
   font-family: tokens.$font-display;
-  color: tokens.$color-duotone-shadow-match;
+  color: tokens.$color-text-heading;
   font-weight: 800;
   margin: 0 0 tokens.$space-sm;
+  line-height: 1.1;
+
+  @media (width <=30rem) {
+    font-size: 3rem;
+  }
 }
 
-h2 {
-  font-size: 3rem;
-  color: tokens.$color-duotone-shadow-match;
+h2,
+.tagline {
+  font-size: clamp(1.25rem, 6vw, 3rem);
+  color: tokens.$color-text-heading;
   font-weight: 100;
   margin: 0 0 tokens.$space-sm;
+
+  @media (width <=30rem) {
+    font-size: 1.25rem;
+  }
 }

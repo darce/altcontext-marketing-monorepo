@@ -5,6 +5,12 @@
   margin-top: tokens.$space-md * 3;
   padding: tokens.$space-md * 2;
   text-align: center;
+
+  @media (width <=30rem) {
+    margin-top: auto;
+    padding: tokens.$space-md;
+    z-index: 2;
+  }
 }
 
 .email-capture {
@@ -26,7 +32,7 @@
   gap: tokens.$space-sm;
   flex-wrap: wrap;
 
-  @media (width <= 30rem) {
+  @media (width <=30rem) {
     flex-direction: column;
   }
 }
@@ -52,8 +58,9 @@
     box-shadow: 0 0 0 2px rgb(224 99 193 / 20%);
   }
 
-  @media (width <= 30rem) {
+  @media (width <=30rem) {
     width: 100%;
+    font-size: 16px; // Prevent Safari auto-zoom
   }
 }
 
@@ -85,7 +92,7 @@
     box-shadow: 0 0 0 2px rgb(224 99 193 / 40%);
   }
 
-  @media (width <= 30rem) {
+  @media (width <=30rem) {
     width: 100%;
   }
 }

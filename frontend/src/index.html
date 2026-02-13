@@ -42,11 +42,19 @@
   </head>
 
   <body>
-    <main class="container">
+    <header class="container">
       <h1>AltContext.</h1>
-      <h2>Face Recognition for WordPress.</h2>
+      <p class="tagline">Face Recognition for WordPress.</p>
+    </header>
+
+    <main class="container">
       <div class="face-pose-shell">
-        <div id="face-container" class="face-pose-viewer duotone">
+        <div
+          id="face-container"
+          role="img"
+          aria-label="Interactive face pose viewer"
+          class="face-pose-viewer duotone"
+        >
           <img
             id="face-image"
             src=""
@@ -137,50 +145,53 @@ Loading metadata...</pre
       </svg>
     </main>
 
-    <section class="email-capture-section">
-      <form
-        id="email-form"
-        method="POST"
-        action="/v1/leads/capture"
-        class="email-capture"
-      >
-        <label for="email-input" class="email-capture-label"
-          >Get early access:</label
+    <footer class="container">
+      <section class="email-capture-section" aria-label="Email signup">
+        <form
+          id="email-form"
+          method="POST"
+          action="/v1/leads/capture"
+          class="email-capture"
         >
-        <div class="email-capture-row">
+          <label for="email-input" class="email-capture-label"
+            >Get early access:</label
+          >
+          <div class="email-capture-row">
+            <input
+              id="email-input"
+              type="email"
+              name="email"
+              placeholder="you@example.com"
+              required
+              autocomplete="email"
+              class="email-capture-input"
+            />
+            <button type="submit" class="email-capture-button">Sign up</button>
+          </div>
+          <!-- Honeypot — hidden from real users -->
           <input
-            id="email-input"
-            type="email"
-            name="email"
-            placeholder="you@example.com"
-            required
-            autocomplete="email"
-            class="email-capture-input"
+            type="text"
+            name="honeypot"
+            tabindex="-1"
+            autocomplete="off"
+            aria-hidden="true"
+            style="
+              position: absolute;
+              left: -9999px;
+              width: 1px;
+              height: 1px;
+              opacity: 0;
+              pointer-events: none;
+            "
           />
-          <button type="submit" class="email-capture-button">Sign up</button>
-        </div>
-        <!-- Honeypot — hidden from real users -->
-        <input
-          type="text"
-          name="honeypot"
-          tabindex="-1"
-          autocomplete="off"
-          aria-hidden="true"
-          style="
-            position: absolute;
-            left: -9999px;
-            width: 1px;
-            height: 1px;
-            opacity: 0;
-            pointer-events: none;
-          "
-        />
-        <input type="hidden" name="path" value="/" />
-        <p class="email-capture-consent">
-          We'll email you product updates. <a href="#">Unsubscribe anytime.</a>
-          <a href="#">Privacy policy.</a>
-        </p>
-      </form>
-    </section>
+          <input type="hidden" name="path" value="/" />
+          <p class="email-capture-consent">
+            We'll email you product updates.
+            <a href="#">Unsubscribe anytime.</a>
+            <a href="#">Privacy policy.</a>
+          </p>
+        </form>
+      </section>
+    </footer>
   </body>
 </html>
