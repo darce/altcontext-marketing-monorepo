@@ -6,6 +6,8 @@ import { ConsentStatus, LinkSource } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 
 import { createApp } from "../../src/app.js";
+import { env } from "../../src/config/env.js";
+import { EVENT_INGEST_ENDPOINT } from "../../src/lib/ingest-rejections.js";
 import { prisma } from "../../src/lib/prisma.js";
 import { closeDatabase, resetDatabase } from "../helpers/db.js";
 
@@ -63,22 +65,8 @@ test("POST /v1/events stores validated events and returns 202", async () => {
       },
       traffic: {
         propertyId: "marketing-site",
-        host: "www.altcontext.dev",
-        pageTitle: "Pricing",
-        language: "en-CA",
         deviceType: "desktop",
-        browserName: "Chrome",
-        browserVersion: "122",
-        osName: "macOS",
-        osVersion: "14.7",
         countryCode: "ca",
-        region: "Ontario",
-        city: "Toronto",
-        timezone: "America/Toronto",
-        screenWidth: 2560,
-        screenHeight: 1440,
-        viewportWidth: 1512,
-        viewportHeight: 920,
         engagedTimeMs: 5800,
         scrollDepthPercent: 65,
         isEntrance: true,
@@ -105,6 +93,14 @@ test("POST /v1/events stores validated events and returns 202", async () => {
       path: true,
       ipHash: true,
       uaHash: true,
+      propertyId: true,
+      trafficSource: true,
+      deviceType: true,
+      countryCode: true,
+      isEntrance: true,
+      isExit: true,
+      isConversion: true,
+      props: true,
       visitor: {
         select: {
           id: true,
@@ -128,31 +124,21 @@ test("POST /v1/events stores validated events and returns 202", async () => {
   assert.equal(event.ipHash?.length, 64);
   assert.equal(event.uaHash?.length, 64);
 
-  const trafficLog = await prisma.webTrafficLog.findUnique({
-    where: { eventId: body.eventId },
-    select: {
-      propertyId: true,
-      host: true,
-      path: true,
-      trafficSource: true,
-      pageTitle: true,
-      countryCode: true,
-      scrollDepthPercent: true,
-      lcpMs: true,
-      clsScore: true,
-    },
-  });
+  // Promoted columns
+  assert.equal(event.propertyId, "marketing-site");
+  assert.equal(event.trafficSource, "campaign");
+  assert.equal(event.deviceType, "desktop");
+  assert.equal(event.countryCode, "CA");
+  assert.equal(event.isEntrance, true);
+  assert.equal(event.isExit, false);
+  assert.equal(event.isConversion, false);
 
-  assert.ok(trafficLog);
-  assert.equal(trafficLog.propertyId, "marketing-site");
-  assert.equal(trafficLog.host, "altcontext.dev");
-  assert.equal(trafficLog.path, "/pricing");
-  assert.equal(trafficLog.trafficSource, "campaign");
-  assert.equal(trafficLog.pageTitle, "Pricing");
-  assert.equal(trafficLog.countryCode, "CA");
-  assert.equal(trafficLog.scrollDepthPercent, 65);
-  assert.equal(trafficLog.lcpMs, 1800);
-  assert.equal(trafficLog.clsScore, 0.03);
+  // JSONB props include CWV + engagement
+  const props = event.props as Record<string, unknown>;
+  assert.equal(props.cta, "hero");
+  assert.equal(props.scrollDepthPercent, 65);
+  assert.equal(props.lcpMs, 1800);
+  assert.equal(props.clsScore, 0.03);
 });
 
 test("POST /v1/events returns 400 on invalid payload", async () => {
@@ -168,6 +154,108 @@ test("POST /v1/events returns 400 on invalid payload", async () => {
 
   assert.equal(response.statusCode, 400);
   assert.equal(response.json<{ ok: boolean; error: string }>().ok, false);
+
+  const rejection = await prisma.ingestRejection.findFirst({
+    orderBy: { occurredAt: "desc" },
+    select: {
+      endpoint: true,
+      reason: true,
+      statusCode: true,
+    },
+  });
+  assert.ok(rejection);
+  assert.equal(rejection.endpoint, EVENT_INGEST_ENDPOINT);
+  assert.equal(rejection.reason, "invalid_request");
+  assert.equal(rejection.statusCode, 400);
+});
+
+test("POST /v1/events deduplicates retried payloads", async () => {
+  const payload = {
+    anonId: "anon-events-dedupe-001",
+    eventType: "page_view",
+    path: "/pricing",
+    timestamp: "2026-02-14T05:00:00.000Z",
+    referrer: "https://example.com/",
+    props: {
+      cta: "hero",
+      section: "top",
+    },
+    traffic: {
+      propertyId: "marketing-site",
+      deviceType: "desktop",
+      isEntrance: true,
+      webVitals: {
+        ttfbMs: 220,
+      },
+    },
+  };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/events",
+    headers: requestHeaders,
+    payload,
+  });
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/events",
+    headers: requestHeaders,
+    payload,
+  });
+
+  assert.equal(first.statusCode, 202);
+  assert.equal(second.statusCode, 202, second.body);
+
+  const firstBody = first.json<EventsResponseBody>();
+  const secondBody = second.json<EventsResponseBody>();
+  assert.equal(secondBody.eventId, firstBody.eventId);
+
+  const eventCount = await prisma.event.count();
+  assert.equal(eventCount, 1);
+});
+
+test("POST /v1/events deduplicates retries when timestamp is omitted", async () => {
+  const payload = {
+    anonId: "anon-events-dedupe-no-timestamp-001",
+    eventType: "page_view",
+    path: "/pricing",
+    referrer: "https://example.com/",
+    props: {
+      cta: "hero",
+      section: "top",
+    },
+    traffic: {
+      propertyId: "marketing-site",
+      deviceType: "desktop",
+      isEntrance: true,
+      webVitals: {
+        ttfbMs: 220,
+      },
+    },
+  };
+
+  const first = await app.inject({
+    method: "POST",
+    url: "/v1/events",
+    headers: requestHeaders,
+    payload,
+  });
+  const second = await app.inject({
+    method: "POST",
+    url: "/v1/events",
+    headers: requestHeaders,
+    payload,
+  });
+
+  assert.equal(first.statusCode, 202);
+  assert.equal(second.statusCode, 202, second.body);
+
+  const firstBody = first.json<EventsResponseBody>();
+  const secondBody = second.json<EventsResponseBody>();
+  assert.equal(secondBody.eventId, firstBody.eventId);
+
+  const eventCount = await prisma.event.count();
+  assert.equal(eventCount, 1);
 });
 
 test("POST /v1/leads/capture normalizes email and creates identity + consent audit", async () => {
@@ -305,20 +393,27 @@ test("POST /v1/leads/unsubscribe sets consent to withdrawn", async () => {
 });
 
 test("POST /v1/leads/delete is blocked when admin auth is not configured", async () => {
-  const response = await app.inject({
-    method: "POST",
-    url: "/v1/leads/delete",
-    headers: requestHeaders,
-    payload: {
-      email: "person@example.com",
-    },
-  });
+  const previousAdminKey = env.ADMIN_API_KEY;
+  env.ADMIN_API_KEY = undefined;
 
-  assert.equal(response.statusCode, 503);
-  assert.equal(
-    response.json<{ ok: boolean; error: string }>().error,
-    "admin_auth_not_configured",
-  );
+  try {
+    const response = await app.inject({
+      method: "POST",
+      url: "/v1/leads/delete",
+      headers: requestHeaders,
+      payload: {
+        email: "person@example.com",
+      },
+    });
+
+    assert.equal(response.statusCode, 503);
+    assert.equal(
+      response.json<{ ok: boolean; error: string }>().error,
+      "admin_auth_not_configured",
+    );
+  } finally {
+    env.ADMIN_API_KEY = previousAdminKey;
+  }
 });
 
 test("frontend-style submission flow responds quickly and does not block", async () => {

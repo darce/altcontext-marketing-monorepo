@@ -41,7 +41,7 @@ node_modules: package.json
 # ---------------------------------------------------------------------------
 # Quality gates
 # ---------------------------------------------------------------------------
-.PHONY: typecheck lint format check test
+.PHONY: typecheck lint format check test dead-exports duplicates audit
 
 typecheck: install
 	npm run typecheck
@@ -58,7 +58,15 @@ format: install
 format-fix: install
 	npm run format:fix
 
-check: typecheck lint format  ## Run all quality gates
+dead-exports: install  ## Find unused exports (ts-prune)
+	npm run dead-exports
+
+duplicates: install  ## Detect copy-paste clones (jscpd)
+	npm run duplicates
+
+check: generate typecheck lint format  ## Run all quality gates
+
+audit: check dead-exports duplicates  ## Full audit: quality gates + dead exports + duplication
 
 test: install db-start db-create ## Run backend tests against isolated schema
 	DATABASE_URL="$(TEST_DATABASE_URL)" npm run migrate:reset
@@ -102,7 +110,7 @@ db-studio: install  ## Open Prisma Studio
 # ---------------------------------------------------------------------------
 # Migrations (Prisma)
 # ---------------------------------------------------------------------------
-.PHONY: migrate migrate-deploy migrate-status migrate-reset generate
+.PHONY: migrate migrate-deploy migrate-status migrate-reset generate rollups-run rollups-backfill rollups-status rollups-discrepancy rollups-mv-init rollups-mv-refresh
 
 migrate: install db-start  ## Create and apply a dev migration (interactive)
 	npm run migrate
@@ -118,6 +126,24 @@ migrate-reset: install db-start  ## Reset DB and re-apply all migrations
 
 generate: install  ## Regenerate Prisma Client
 	npm run prisma:generate
+
+rollups-run: install db-start  ## Generate rollups for recent default window
+	npm run rollups:run
+
+rollups-backfill: install db-start  ## Recompute rollups (pass ARGS='--from=YYYY-MM-DD --to=YYYY-MM-DD [--property-id=id]')
+	npm run rollups:backfill -- $(ARGS)
+
+rollups-status: install db-start  ## Show rollup freshness/status (pass ARGS='--property-id=id')
+	npm run rollups:status -- $(ARGS)
+
+rollups-discrepancy: install db-start  ## Compare raw counts vs rollup totals (pass ARGS='--from=YYYY-MM-DD --to=YYYY-MM-DD [--property-id=id]')
+	npm run rollups:discrepancy -- $(ARGS)
+
+rollups-mv-init: install db-start  ## Create metrics materialized view (pass ARGS='--refresh' to build immediately)
+	npm run rollups:mv:init -- $(ARGS)
+
+rollups-mv-refresh: install db-start  ## Refresh metrics materialized view
+	npm run rollups:mv:refresh
 
 # ---------------------------------------------------------------------------
 # Server

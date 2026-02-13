@@ -1,7 +1,9 @@
 import { prisma } from "../../src/lib/prisma.js";
 
 export const resetDatabase = async (): Promise<void> => {
-  await prisma.webTrafficLog.deleteMany();
+  await prisma.dailyIngestRollup.deleteMany();
+  await prisma.dailyMetricRollup.deleteMany();
+  await prisma.ingestRejection.deleteMany();
   await prisma.consentEvent.deleteMany();
   await prisma.formSubmission.deleteMany();
   await prisma.event.deleteMany();

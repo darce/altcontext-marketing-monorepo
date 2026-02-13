@@ -18,13 +18,14 @@ const resolveSchemaName = (connectionString: string): string | undefined => {
   }
 };
 
-const schema = resolveSchemaName(datasourceUrl) ?? fallbackSchema;
+export const databaseSchema =
+  resolveSchemaName(datasourceUrl) ?? fallbackSchema ?? "public";
 
 const adapter = new PrismaPg(
   {
     connectionString: datasourceUrl,
   },
-  schema ? { schema } : undefined,
+  databaseSchema ? { schema: databaseSchema } : undefined,
 );
 
 export const prisma = new PrismaClient({

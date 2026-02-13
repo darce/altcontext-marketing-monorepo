@@ -7,6 +7,7 @@ import {
   leadCaptureBodySchema,
   unsubscribeBodySchema,
 } from "../../src/schemas/leads.js";
+import { summaryQuerySchema } from "../../src/schemas/metrics.js";
 
 test("eventBodySchema parses a valid payload", () => {
   const parsed = eventBodySchema.parse({
@@ -94,6 +95,39 @@ test("unsubscribeBodySchema rejects malformed email", () => {
     () =>
       unsubscribeBodySchema.parse({
         email: "not-an-email",
+      }),
+    ZodError,
+  );
+});
+
+test("summaryQuerySchema parses ISO day window and compareTo coercion", () => {
+  const parsed = summaryQuerySchema.parse({
+    from: "2026-02-01",
+    to: "2026-02-07",
+    compareTo: "yes",
+  });
+
+  assert.equal(parsed.from.toISOString(), "2026-02-01T00:00:00.000Z");
+  assert.equal(parsed.to.toISOString(), "2026-02-07T00:00:00.000Z");
+  assert.equal(parsed.compareTo, true);
+  assert.equal(parsed.propertyId.length > 0, true);
+});
+
+test("summaryQuerySchema rejects inverted windows and bad dates", () => {
+  assert.throws(
+    () =>
+      summaryQuerySchema.parse({
+        from: "2026-02-10",
+        to: "2026-02-01",
+      }),
+    ZodError,
+  );
+
+  assert.throws(
+    () =>
+      summaryQuerySchema.parse({
+        from: "2026-02-30",
+        to: "2026-03-01",
       }),
     ZodError,
   );

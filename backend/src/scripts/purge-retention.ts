@@ -20,7 +20,6 @@ const run = async (): Promise<void> => {
     where: {
       events: { none: {} },
       formSubmissions: { none: {} },
-      webTrafficLogs: { none: {} },
     },
   });
 
@@ -30,7 +29,6 @@ const run = async (): Promise<void> => {
       events: { none: {} },
       formSubmissions: { none: {} },
       leadIdentities: { none: {} },
-      webTrafficLogs: { none: {} },
     },
   });
 

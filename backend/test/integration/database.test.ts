@@ -55,11 +55,13 @@ test("migration tables exist in the active schema", async () => {
     "visitors",
     "sessions",
     "events",
-    "web_traffic_logs",
+    "ingest_rejections",
     "leads",
     "lead_identities",
     "form_submissions",
     "consent_events",
+    "daily_metric_rollups",
+    "daily_ingest_rollups",
   ]) {
     assert.equal(
       tableNames.has(expected),
@@ -137,6 +139,52 @@ test("lead_identities composite key enforces uniqueness", async () => {
         visitorId: visitor.id,
         linkSource: LinkSource.form_submit,
         confidence: 0.4,
+      },
+    }),
+    (error: unknown) =>
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002",
+  );
+});
+
+test("events.dedupe_key enforces uniqueness when populated", async () => {
+  const visitor = await prisma.visitor.create({
+    data: {
+      anonId: "anon-dedupe-visitor-001",
+    },
+    select: { id: true },
+  });
+  const session = await prisma.session.create({
+    data: {
+      visitorId: visitor.id,
+      startedAt: new Date("2026-02-14T00:00:00.000Z"),
+      lastEventAt: new Date("2026-02-14T00:00:00.000Z"),
+    },
+    select: { id: true },
+  });
+
+  await prisma.event.create({
+    data: {
+      visitorId: visitor.id,
+      sessionId: session.id,
+      dedupeKey:
+        "beecf3f3f96d96f581af596f4f8fc4a000ea5d0302fb05501858be3349f7ebf7",
+      eventType: "page_view",
+      path: "/",
+      timestamp: new Date("2026-02-14T00:00:00.000Z"),
+    },
+  });
+
+  await assert.rejects(
+    prisma.event.create({
+      data: {
+        visitorId: visitor.id,
+        sessionId: session.id,
+        dedupeKey:
+          "beecf3f3f96d96f581af596f4f8fc4a000ea5d0302fb05501858be3349f7ebf7",
+        eventType: "page_view",
+        path: "/",
+        timestamp: new Date("2026-02-14T00:00:01.000Z"),
       },
     }),
     (error: unknown) =>

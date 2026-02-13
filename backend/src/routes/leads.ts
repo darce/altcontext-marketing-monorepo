@@ -1,8 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
-
 import type { FastifyPluginAsync } from "fastify";
 
-import { env } from "../config/env.js";
+import { assertAdminRequest } from "../lib/admin-auth.js";
 import { prisma } from "../lib/prisma.js";
 import { requestContextFrom } from "../lib/request-context.js";
 import {
@@ -36,21 +34,6 @@ const resolveRedirectPath = (value: string | undefined): string => {
   }
 
   return normalized.length > 0 ? normalized : "/";
-};
-
-const hasValidAdminKey = (requestKey: string): boolean => {
-  const configuredKey = env.ADMIN_API_KEY;
-  if (!configuredKey) {
-    return false;
-  }
-
-  const configured = Buffer.from(configuredKey);
-  const supplied = Buffer.from(requestKey);
-  if (configured.length !== supplied.length) {
-    return false;
-  }
-
-  return timingSafeEqual(configured, supplied);
 };
 
 export const leadRoutes: FastifyPluginAsync = async (app) => {
@@ -112,17 +95,8 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      if (!env.ADMIN_API_KEY) {
-        request.log.error("ADMIN_API_KEY is not configured");
-        return reply.code(503).send({
-          ok: false,
-          error: "admin_auth_not_configured",
-        });
-      }
-
-      const requestKey = request.headers["x-admin-key"];
-      if (typeof requestKey !== "string" || !hasValidAdminKey(requestKey)) {
-        return reply.code(401).send({ ok: false, error: "unauthorized" });
+      if (!assertAdminRequest(request, reply)) {
+        return;
       }
 
       const body = deleteByEmailBodySchema.parse(request.body);

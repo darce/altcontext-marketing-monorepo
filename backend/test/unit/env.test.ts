@@ -22,6 +22,15 @@ test("parseEnvironment applies defaults for optional values", () => {
   assert.equal(parsed.ENABLE_HEURISTIC_LINKING, true);
   assert.deepEqual(parsed.CORS_ALLOWED_ORIGINS, []);
   assert.equal(parsed.ADMIN_API_KEY, undefined);
+  assert.equal(parsed.ROLLUP_BATCH_DAYS, 7);
+  assert.equal(parsed.ROLLUP_DEFAULT_PROPERTY_ID, "default");
+  assert.equal(parsed.METRICS_SUMMARY_CACHE_TTL_MS, 15000);
+  assert.equal(parsed.METRICS_SUMMARY_CACHE_MAX_ENTRIES, 128);
+  assert.equal(parsed.METRICS_USE_MATERIALIZED_VIEW, false);
+  assert.equal(
+    parsed.METRICS_MATERIALIZED_VIEW_NAME,
+    "metrics_daily_summary_mv",
+  );
   assert.equal(parsed.PRIVACY_CONTACT_EMAIL, "privacy@altcontext.local");
 });
 
@@ -29,14 +38,18 @@ test("parseEnvironment handles boolean coercion flags", () => {
   const disabled = parseEnvironment({
     ...baseEnv,
     ENABLE_HEURISTIC_LINKING: "off",
+    METRICS_USE_MATERIALIZED_VIEW: "off",
   });
   const enabled = parseEnvironment({
     ...baseEnv,
     ENABLE_HEURISTIC_LINKING: "yes",
+    METRICS_USE_MATERIALIZED_VIEW: "yes",
   });
 
   assert.equal(disabled.ENABLE_HEURISTIC_LINKING, false);
   assert.equal(enabled.ENABLE_HEURISTIC_LINKING, true);
+  assert.equal(disabled.METRICS_USE_MATERIALIZED_VIEW, false);
+  assert.equal(enabled.METRICS_USE_MATERIALIZED_VIEW, true);
 });
 
 test("parseEnvironment parses comma-separated CORS origins", () => {
@@ -77,6 +90,20 @@ test("parseEnvironment rejects invalid values", () => {
     parseEnvironment({
       ...baseEnv,
       ADMIN_API_KEY: "too-short",
+    }),
+  );
+
+  assert.throws(() =>
+    parseEnvironment({
+      ...baseEnv,
+      ROLLUP_BATCH_DAYS: "0",
+    }),
+  );
+
+  assert.throws(() =>
+    parseEnvironment({
+      ...baseEnv,
+      METRICS_SUMMARY_CACHE_TTL_MS: "-1",
     }),
   );
 });

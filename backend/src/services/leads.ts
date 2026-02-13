@@ -74,14 +74,16 @@ export const captureLead = async (
     data: eventData,
   });
 
-  await linkLeadToVisitor(tx, lead.id, visitor.id, LinkSource.form_submit, 1);
-  const heuristicLinksCreated = await linkHeuristicVisitors(
-    tx,
-    lead.id,
-    visitor.id,
-    context.ipHash,
-    context.uaHash,
-  );
+  const [, heuristicLinksCreated] = await Promise.all([
+    linkLeadToVisitor(tx, lead.id, visitor.id, LinkSource.form_submit, 1),
+    linkHeuristicVisitors(
+      tx,
+      lead.id,
+      visitor.id,
+      context.ipHash,
+      context.uaHash,
+    ),
+  ]);
 
   const submissionData: PrismaTypes.FormSubmissionCreateInput = {
     lead: { connect: { id: lead.id } },

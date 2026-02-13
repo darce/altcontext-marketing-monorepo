@@ -33,6 +33,29 @@ const environmentSchema = z.object({
     .transform(boolFromString),
   CORS_ALLOWED_ORIGINS: z.string().default("").transform(csvToList),
   ADMIN_API_KEY: z.string().min(24).optional(),
+  ROLLUP_BATCH_DAYS: z.coerce.number().int().min(1).max(365).default(7),
+  ROLLUP_DEFAULT_PROPERTY_ID: z
+    .string()
+    .trim()
+    .min(1)
+    .max(128)
+    .default("default"),
+  METRICS_SUMMARY_CACHE_TTL_MS: z.coerce.number().int().min(0).default(15_000),
+  METRICS_SUMMARY_CACHE_MAX_ENTRIES: z.coerce
+    .number()
+    .int()
+    .min(0)
+    .default(128),
+  METRICS_USE_MATERIALIZED_VIEW: z
+    .string()
+    .default("false")
+    .transform(boolFromString),
+  METRICS_MATERIALIZED_VIEW_NAME: z
+    .string()
+    .trim()
+    .min(1)
+    .max(128)
+    .default("metrics_daily_summary_mv"),
   PRIVACY_CONTACT_EMAIL: z.string().email().default("privacy@altcontext.local"),
 });
 

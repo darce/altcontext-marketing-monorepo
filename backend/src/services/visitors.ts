@@ -127,6 +127,12 @@ export const ensureVisitorSession = async (
 
   let session: Session;
   if (shouldStartNewSession(latestSession, input.occurredAt, input.utm)) {
+    if (latestSession?.endedAt === null) {
+      await tx.session.update({
+        where: { id: latestSession.id },
+        data: { endedAt: latestSession.lastEventAt },
+      });
+    }
     session = await createSession(tx, visitor.id, input.occurredAt, input);
   } else if (latestSession) {
     session = await updateSession(tx, latestSession.id, input.occurredAt);

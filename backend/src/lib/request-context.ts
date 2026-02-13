@@ -1,4 +1,4 @@
-import { createHmac } from "node:crypto";
+import { createHmac, createSecretKey } from "node:crypto";
 
 import type { FastifyRequest } from "fastify";
 
@@ -12,10 +12,10 @@ export interface RequestContext {
   userAgent: string;
 }
 
+const pepperKey = createSecretKey(Buffer.from(env.IP_HASH_PEPPER));
+
 const hashValue = (value: string): string =>
   createHmac("sha256", pepperKey).update(value).digest("hex");
-
-const pepperKey = Buffer.from(env.IP_HASH_PEPPER);
 
 const readRequestIp = (request: FastifyRequest): string => {
   const forwarded = request.headers["x-forwarded-for"];

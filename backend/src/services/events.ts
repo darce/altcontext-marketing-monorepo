@@ -1,6 +1,9 @@
-import { DeviceType, TrafficSource, type Prisma } from "@prisma/client";
+import { createHash, randomUUID } from "node:crypto";
 
-import { toPrismaJson } from "../lib/json.js";
+import { DeviceType, TrafficSource } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
+
+import { tableRef, typeRef } from "../lib/sql.js";
 import type { EventBody } from "../schemas/events.js";
 import { ensureVisitorSession } from "./visitors.js";
 import type { RequestContext } from "../lib/request-context.js";
@@ -10,6 +13,17 @@ export interface EventIngestResult {
   visitorId: string;
   sessionId: string;
 }
+
+interface EventRecord {
+  id: string;
+  visitorId: string;
+  sessionId: string | null;
+}
+
+const EVENTS_TABLE = tableRef("events");
+const TRAFFIC_SOURCE_TYPE = typeRef("TrafficSource");
+const DEVICE_TYPE_TYPE = typeRef("DeviceType");
+const DEDUPE_WINDOW_MS = 30_000;
 
 const normalizeOptional = (value?: string): string | null => {
   if (!value) {
@@ -30,6 +44,49 @@ const normalizeHost = (value?: string): string | null => {
   const withoutPort = (withoutPath ?? "").split(":")[0] ?? "";
   const hostname = withoutPort.toLowerCase().replace(/^www\./, "");
   return hostname.length > 0 ? hostname : null;
+};
+
+const stableStringify = (value: unknown): string => {
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((entry) => stableStringify(entry)).join(",")}]`;
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const sortedEntries = Object.entries(record).sort(([left], [right]) =>
+      left.localeCompare(right),
+    );
+    return `{${sortedEntries
+      .map(([key, entry]) => `${JSON.stringify(key)}:${stableStringify(entry)}`)
+      .join(",")}}`;
+  }
+  return JSON.stringify(value);
+};
+
+const buildEventDedupeKey = (
+  body: EventBody,
+  sessionId: string,
+  context: RequestContext,
+  dedupeTimeToken: string,
+): string => {
+  const components = [
+    "v1",
+    body.anonId,
+    sessionId,
+    body.eventType,
+    body.path,
+    dedupeTimeToken,
+    body.referrer ?? "",
+    context.ipHash,
+    context.uaHash,
+    stableStringify(body.utm ?? null),
+    stableStringify(body.traffic ?? null),
+    stableStringify(body.props ?? null),
+  ];
+
+  return createHash("sha256").update(components.join("|")).digest("hex");
 };
 
 const toReferrerHost = (referrer?: string): string | null => {
@@ -170,87 +227,96 @@ export const ingestEvent = async (
     referrer: body.referrer,
     utm: body.utm,
   });
+  const dedupeTimeToken =
+    body.timestamp instanceof Date
+      ? body.timestamp.toISOString()
+      : `window:${Math.floor(occurredAt.getTime() / DEDUPE_WINDOW_MS)}`;
+  const dedupeKey = buildEventDedupeKey(
+    body,
+    session.id,
+    context,
+    dedupeTimeToken,
+  );
 
-  const data: Prisma.EventCreateInput = {
-    visitor: { connect: { id: visitor.id } },
-    session: { connect: { id: session.id } },
-    eventType: body.eventType,
-    path: body.path,
-    timestamp: occurredAt,
-    ipHash: context.ipHash,
-    uaHash: context.uaHash,
-  };
-  const props = toPrismaJson(body.props);
-  if (props !== undefined) {
-    data.props = props;
-  }
-
-  const event = await tx.event.create({
-    data,
-    select: { id: true },
-  });
+  const eventId = randomUUID();
 
   const referrer = normalizeOptional(body.referrer);
   const referrerHost = toReferrerHost(referrer ?? undefined);
   const requestHost = normalizeHost(context.host);
-  const trafficHost =
-    normalizeHost(body.traffic?.host) ?? requestHost ?? "unknown";
   const webVitals = body.traffic?.webVitals;
 
-  const trafficLogData: Prisma.WebTrafficLogCreateInput = {
-    event: { connect: { id: event.id } },
-    visitor: { connect: { id: visitor.id } },
-    session: { connect: { id: session.id } },
-    eventType: body.eventType,
-    propertyId: normalizeOptional(body.traffic?.propertyId) ?? trafficHost,
-    host: trafficHost,
-    path: body.path,
-    referrer,
-    referrerHost,
-    trafficSource: resolveTrafficSource(body, referrerHost, requestHost),
-    utmSource: normalizeOptional(body.utm?.source),
-    utmMedium: normalizeOptional(body.utm?.medium),
-    utmCampaign: normalizeOptional(body.utm?.campaign),
-    utmTerm: normalizeOptional(body.utm?.term),
-    utmContent: normalizeOptional(body.utm?.content),
-    pageTitle: normalizeOptional(body.traffic?.pageTitle),
-    language: normalizeOptional(body.traffic?.language),
-    deviceType: resolveDeviceType(body.traffic?.deviceType, context.userAgent),
-    browserName: normalizeOptional(body.traffic?.browserName),
-    browserVersion: normalizeOptional(body.traffic?.browserVersion),
-    osName: normalizeOptional(body.traffic?.osName),
-    osVersion: normalizeOptional(body.traffic?.osVersion),
-    countryCode:
-      normalizeOptional(body.traffic?.countryCode)?.toUpperCase() ?? null,
-    region: normalizeOptional(body.traffic?.region),
-    city: normalizeOptional(body.traffic?.city),
-    timezone: normalizeOptional(body.traffic?.timezone),
-    screenWidth: body.traffic?.screenWidth ?? null,
-    screenHeight: body.traffic?.screenHeight ?? null,
-    viewportWidth: body.traffic?.viewportWidth ?? null,
-    viewportHeight: body.traffic?.viewportHeight ?? null,
-    engagedTimeMs: body.traffic?.engagedTimeMs ?? null,
-    scrollDepthPercent: body.traffic?.scrollDepthPercent ?? null,
-    fcpMs: webVitals?.fcpMs ?? null,
-    lcpMs: webVitals?.lcpMs ?? null,
-    inpMs: webVitals?.inpMs ?? null,
-    clsScore: webVitals?.clsScore ?? null,
-    ttfbMs: webVitals?.ttfbMs ?? null,
-    isEntrance: body.traffic?.isEntrance ?? body.eventType === "page_view",
-    isExit: body.traffic?.isExit ?? false,
-    isConversion:
-      body.traffic?.isConversion ?? body.eventType === "form_submit",
-    ipHash: context.ipHash,
-    uaHash: context.uaHash,
-    occurredAt,
+  // Build enriched props: merge user-supplied props with CWV + engagement
+  const enrichedProps: Record<string, unknown> = {
+    ...body.props,
+    ...(webVitals?.fcpMs != null && { fcpMs: webVitals.fcpMs }),
+    ...(webVitals?.lcpMs != null && { lcpMs: webVitals.lcpMs }),
+    ...(webVitals?.inpMs != null && { inpMs: webVitals.inpMs }),
+    ...(webVitals?.ttfbMs != null && { ttfbMs: webVitals.ttfbMs }),
+    ...(webVitals?.clsScore != null && { clsScore: webVitals.clsScore }),
+    ...(body.traffic?.engagedTimeMs != null && {
+      engagedTimeMs: body.traffic.engagedTimeMs,
+    }),
+    ...(body.traffic?.scrollDepthPercent != null && {
+      scrollDepthPercent: body.traffic.scrollDepthPercent,
+    }),
   };
-  await tx.webTrafficLog.create({
-    data: trafficLogData,
-  });
+  const serializedProps =
+    Object.keys(enrichedProps).length > 0
+      ? JSON.stringify(enrichedProps)
+      : null;
+
+  const trafficSource = resolveTrafficSource(body, referrerHost, requestHost);
+  const deviceType = resolveDeviceType(
+    body.traffic?.deviceType,
+    context.userAgent,
+  );
+  const propertyId =
+    normalizeOptional(body.traffic?.propertyId) ?? requestHost ?? "unknown";
+  const countryCode =
+    normalizeOptional(body.traffic?.countryCode)?.toUpperCase() ?? null;
+  const isEntrance = body.traffic?.isEntrance ?? body.eventType === "page_view";
+  const isExit = body.traffic?.isExit ?? false;
+  const isConversion =
+    body.traffic?.isConversion ?? body.eventType === "form_submit";
+
+  const insertedRows = await tx.$queryRaw<Array<EventRecord>>`
+    INSERT INTO ${EVENTS_TABLE} (
+      "id", "visitor_id", "session_id", "dedupe_key",
+      "event_type", "path", "timestamp",
+      "ip_hash", "ua_hash", "props",
+      "property_id", "traffic_source", "device_type",
+      "country_code", "is_entrance", "is_exit", "is_conversion"
+    )
+    VALUES (
+      ${eventId}, ${visitor.id}, ${session.id}, ${dedupeKey},
+      ${body.eventType}, ${body.path}, ${occurredAt},
+      ${context.ipHash}, ${context.uaHash}, ${serializedProps}::jsonb,
+      ${propertyId}, ${trafficSource}::${TRAFFIC_SOURCE_TYPE}, ${deviceType}::${DEVICE_TYPE_TYPE},
+      ${countryCode}, ${isEntrance}, ${isExit}, ${isConversion}
+    )
+    ON CONFLICT ("dedupe_key") DO NOTHING
+    RETURNING "id", "visitor_id" AS "visitorId", "session_id" AS "sessionId"
+  `;
+
+  let event = insertedRows[0];
+  if (!event) {
+    const existing = await tx.event.findUnique({
+      where: { dedupeKey },
+      select: {
+        id: true,
+        visitorId: true,
+        sessionId: true,
+      },
+    });
+    if (!existing) {
+      throw new Error("event_dedupe_lookup_failed");
+    }
+    event = existing;
+  }
 
   return {
     eventId: event.id,
-    visitorId: visitor.id,
-    sessionId: session.id,
+    visitorId: event.visitorId,
+    sessionId: event.sessionId ?? session.id,
   };
 };

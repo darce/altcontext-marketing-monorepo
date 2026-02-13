@@ -25,5 +25,3 @@ export const deleteByEmailBodySchema = z.object({
 });
 
 export type LeadCaptureBody = z.infer<typeof leadCaptureBodySchema>;
-export type UnsubscribeBody = z.infer<typeof unsubscribeBodySchema>;
-export type DeleteByEmailBody = z.infer<typeof deleteByEmailBodySchema>;

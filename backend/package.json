@@ -16,13 +16,21 @@
     "format": "prettier . --check",
     "format:fix": "prettier . --write",
     "check": "npm run typecheck && npm run lint && npm run format",
+    "dead-exports": "sh -c 'output=$(ts-prune | grep -v \"(used in module)\" || true); if [ -n \"$output\" ]; then echo \"$output\"; exit 1; fi'",
+    "duplicates": "jscpd src/ --min-tokens 50 --min-lines 6",
     "prisma:generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "migrate:deploy": "prisma migrate deploy",
     "migrate:status": "prisma migrate status",
     "migrate:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
-    "retention:purge": "tsx src/scripts/purge-retention.ts"
+    "retention:purge": "tsx src/scripts/purge-retention.ts",
+    "rollups:run": "tsx src/scripts/rollups-run.ts",
+    "rollups:backfill": "tsx src/scripts/rollups-backfill.ts",
+    "rollups:status": "tsx src/scripts/rollups-status.ts",
+    "rollups:discrepancy": "tsx src/scripts/rollups-discrepancy.ts",
+    "rollups:mv:init": "tsx src/scripts/rollups-mv-init.ts",
+    "rollups:mv:refresh": "tsx src/scripts/rollups-mv-refresh.ts"
   },
   "keywords": [],
   "author": "",
@@ -44,8 +52,10 @@
     "@typescript-eslint/parser": "^8.55.0",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
+    "jscpd": "^4.0.8",
     "prettier": "^3.8.1",
     "prisma": "^7.4.0",
+    "ts-prune": "^0.10.3",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

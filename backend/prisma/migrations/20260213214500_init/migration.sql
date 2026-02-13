@@ -7,6 +7,12 @@ CREATE TYPE "LinkSource" AS ENUM ('form_submit', 'same_ip_ua_window', 'manual_me
 -- CreateEnum
 CREATE TYPE "ValidationStatus" AS ENUM ('accepted', 'rejected', 'invalid');
 
+-- CreateEnum
+CREATE TYPE "TrafficSource" AS ENUM ('direct', 'organic_search', 'paid_search', 'social', 'email', 'referral', 'campaign', 'internal', 'unknown');
+
+-- CreateEnum
+CREATE TYPE "DeviceType" AS ENUM ('desktop', 'mobile', 'tablet', 'bot', 'unknown');
+
 -- CreateTable
 CREATE TABLE "visitors" (
     "id" TEXT NOT NULL,
@@ -48,12 +54,20 @@ CREATE TABLE "events" (
     "id" TEXT NOT NULL,
     "visitor_id" TEXT NOT NULL,
     "session_id" TEXT,
+    "dedupe_key" VARCHAR(64),
     "event_type" VARCHAR(64) NOT NULL,
     "path" TEXT,
     "timestamp" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "ip_hash" VARCHAR(128),
     "ua_hash" VARCHAR(128),
     "props" JSONB,
+    "property_id" VARCHAR(128) NOT NULL DEFAULT 'default',
+    "traffic_source" "TrafficSource" NOT NULL DEFAULT 'unknown',
+    "device_type" "DeviceType" NOT NULL DEFAULT 'unknown',
+    "country_code" VARCHAR(2),
+    "is_entrance" BOOLEAN NOT NULL DEFAULT false,
+    "is_exit" BOOLEAN NOT NULL DEFAULT false,
+    "is_conversion" BOOLEAN NOT NULL DEFAULT false,
     "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "events_pkey" PRIMARY KEY ("id")
@@ -115,6 +129,62 @@ CREATE TABLE "consent_events" (
     CONSTRAINT "consent_events_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "ingest_rejections" (
+    "id" TEXT NOT NULL,
+    "property_id" VARCHAR(128) NOT NULL,
+    "endpoint" VARCHAR(64) NOT NULL,
+    "reason" VARCHAR(64) NOT NULL,
+    "status_code" INTEGER NOT NULL,
+    "occurred_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT "ingest_rejections_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "daily_metric_rollups" (
+    "id" TEXT NOT NULL,
+    "property_id" VARCHAR(128) NOT NULL,
+    "day" DATE NOT NULL,
+    "unique_visitors" INTEGER NOT NULL DEFAULT 0,
+    "returning_visitors" INTEGER NOT NULL DEFAULT 0,
+    "total_page_views" INTEGER NOT NULL DEFAULT 0,
+    "total_entrances" INTEGER NOT NULL DEFAULT 0,
+    "total_exits" INTEGER NOT NULL DEFAULT 0,
+    "total_conversions" INTEGER NOT NULL DEFAULT 0,
+    "form_starts" INTEGER NOT NULL DEFAULT 0,
+    "form_submits" INTEGER NOT NULL DEFAULT 0,
+    "new_leads" INTEGER NOT NULL DEFAULT 0,
+    "time_to_first_capture_sum_ms" BIGINT NOT NULL DEFAULT 0,
+    "time_to_first_capture_count" INTEGER NOT NULL DEFAULT 0,
+    "traffic_source_breakdown" JSONB,
+    "top_landing_paths" JSONB,
+    "generated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "daily_metric_rollups_pkey" PRIMARY KEY ("id")
+);
+
+-- CreateTable
+CREATE TABLE "daily_ingest_rollups" (
+    "id" TEXT NOT NULL,
+    "property_id" VARCHAR(128) NOT NULL,
+    "day" DATE NOT NULL,
+    "events_accepted" INTEGER NOT NULL DEFAULT 0,
+    "events_rejected" INTEGER NOT NULL DEFAULT 0,
+    "leads_accepted" INTEGER NOT NULL DEFAULT 0,
+    "leads_rejected" INTEGER NOT NULL DEFAULT 0,
+    "p95_ttfb_ms" INTEGER,
+    "error_breakdown" JSONB,
+    "generated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updated_at" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "daily_ingest_rollups_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "visitors_anon_id_key" ON "visitors"("anon_id");
 
@@ -126,6 +196,9 @@ CREATE INDEX "sessions_visitor_id_started_at_idx" ON "sessions"("visitor_id", "s
 
 -- CreateIndex
 CREATE INDEX "sessions_visitor_id_last_event_at_idx" ON "sessions"("visitor_id", "last_event_at");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "events_dedupe_key_key" ON "events"("dedupe_key");
 
 -- CreateIndex
 CREATE INDEX "events_visitor_id_timestamp_idx" ON "events"("visitor_id", "timestamp");
@@ -140,19 +213,25 @@ CREATE INDEX "events_path_timestamp_idx" ON "events"("path", "timestamp");
 CREATE INDEX "events_session_id_timestamp_idx" ON "events"("session_id", "timestamp");
 
 -- CreateIndex
+CREATE INDEX "events_property_id_timestamp_idx" ON "events"("property_id", "timestamp");
+
+-- CreateIndex
+CREATE INDEX "events_traffic_source_timestamp_idx" ON "events"("traffic_source", "timestamp");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "leads_email_normalized_key" ON "leads"("email_normalized");
 
 -- CreateIndex
 CREATE INDEX "leads_last_captured_at_idx" ON "leads"("last_captured_at");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "lead_identities_lead_visitor_source_key" ON "lead_identities"("lead_id", "visitor_id", "link_source");
-
--- CreateIndex
 CREATE INDEX "lead_identities_lead_id_linked_at_idx" ON "lead_identities"("lead_id", "linked_at");
 
 -- CreateIndex
 CREATE INDEX "lead_identities_visitor_id_linked_at_idx" ON "lead_identities"("visitor_id", "linked_at");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "lead_identities_lead_visitor_source_key" ON "lead_identities"("lead_id", "visitor_id", "link_source");
 
 -- CreateIndex
 CREATE INDEX "form_submissions_lead_id_submitted_at_idx" ON "form_submissions"("lead_id", "submitted_at");
@@ -165,6 +244,24 @@ CREATE INDEX "form_submissions_session_id_submitted_at_idx" ON "form_submissions
 
 -- CreateIndex
 CREATE INDEX "consent_events_lead_id_timestamp_idx" ON "consent_events"("lead_id", "timestamp");
+
+-- CreateIndex
+CREATE INDEX "ingest_rejections_property_id_occurred_at_idx" ON "ingest_rejections"("property_id", "occurred_at");
+
+-- CreateIndex
+CREATE INDEX "ingest_rejections_endpoint_occurred_at_idx" ON "ingest_rejections"("endpoint", "occurred_at");
+
+-- CreateIndex
+CREATE INDEX "daily_metric_rollups_day_idx" ON "daily_metric_rollups"("day");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "daily_metric_rollups_property_day_key" ON "daily_metric_rollups"("property_id", "day");
+
+-- CreateIndex
+CREATE INDEX "daily_ingest_rollups_day_idx" ON "daily_ingest_rollups"("day");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "daily_ingest_rollups_property_day_key" ON "daily_ingest_rollups"("property_id", "day");
 
 -- AddForeignKey
 ALTER TABLE "sessions" ADD CONSTRAINT "sessions_visitor_id_fkey" FOREIGN KEY ("visitor_id") REFERENCES "visitors"("id") ON DELETE CASCADE ON UPDATE CASCADE;

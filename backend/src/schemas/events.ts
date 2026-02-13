@@ -15,29 +15,15 @@ const webVitalsSchema = z
 const trafficSchema = z
   .object({
     propertyId: z.string().trim().min(1).max(128).optional(),
-    host: z.string().trim().min(1).max(255).optional(),
-    pageTitle: z.string().trim().min(1).max(512).optional(),
-    language: z.string().trim().min(1).max(32).optional(),
     deviceType: z
       .enum(["desktop", "mobile", "tablet", "bot", "unknown"])
       .optional(),
-    browserName: z.string().trim().min(1).max(64).optional(),
-    browserVersion: z.string().trim().min(1).max(32).optional(),
-    osName: z.string().trim().min(1).max(64).optional(),
-    osVersion: z.string().trim().min(1).max(32).optional(),
     countryCode: z.string().trim().length(2).toUpperCase().optional(),
-    region: z.string().trim().min(1).max(128).optional(),
-    city: z.string().trim().min(1).max(128).optional(),
-    timezone: z.string().trim().min(1).max(64).optional(),
-    screenWidth: z.coerce.number().int().min(1).max(10000).optional(),
-    screenHeight: z.coerce.number().int().min(1).max(10000).optional(),
-    viewportWidth: z.coerce.number().int().min(1).max(10000).optional(),
-    viewportHeight: z.coerce.number().int().min(1).max(10000).optional(),
-    engagedTimeMs: z.coerce.number().int().min(0).max(86_400_000).optional(),
-    scrollDepthPercent: z.coerce.number().int().min(0).max(100).optional(),
     isEntrance: z.boolean().optional(),
     isExit: z.boolean().optional(),
     isConversion: z.boolean().optional(),
+    engagedTimeMs: z.coerce.number().int().min(0).max(86_400_000).optional(),
+    scrollDepthPercent: z.coerce.number().int().min(0).max(100).optional(),
     webVitals: webVitalsSchema,
   })
   .optional();

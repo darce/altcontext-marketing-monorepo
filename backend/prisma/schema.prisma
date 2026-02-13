@@ -59,7 +59,6 @@ model Visitor {
 
   sessions        Session[]
   events          Event[]
-  webTrafficLogs  WebTrafficLog[]
   leadIdentities  LeadIdentity[]
   formSubmissions FormSubmission[]
 
@@ -85,7 +84,6 @@ model Session {
 
   visitor         Visitor          @relation(fields: [visitorId], references: [id], onDelete: Cascade)
   events          Event[]
-  webTrafficLogs  WebTrafficLog[]
   formSubmissions FormSubmission[]
 
   @@index([visitorId, startedAt], map: "sessions_visitor_id_started_at_idx")
@@ -97,14 +95,21 @@ model Event {
   id            String         @id @default(uuid())
   visitorId     String         @map("visitor_id")
   sessionId     String?        @map("session_id")
+  dedupeKey     String?        @unique @db.VarChar(64) @map("dedupe_key")
   eventType     String         @db.VarChar(64) @map("event_type")
   path          String?        @db.Text
   timestamp     DateTime       @default(now())
   ipHash        String?        @db.VarChar(128) @map("ip_hash")
   uaHash        String?        @db.VarChar(128) @map("ua_hash")
   props         Json?
+  propertyId    String         @default("default") @db.VarChar(128) @map("property_id")
+  trafficSource TrafficSource  @default(unknown) @map("traffic_source")
+  deviceType    DeviceType     @default(unknown) @map("device_type")
+  countryCode   String?        @db.VarChar(2) @map("country_code")
+  isEntrance    Boolean        @default(false) @map("is_entrance")
+  isExit        Boolean        @default(false) @map("is_exit")
+  isConversion  Boolean        @default(false) @map("is_conversion")
   createdAt     DateTime       @default(now()) @map("created_at")
-  webTrafficLog WebTrafficLog?
 
   visitor Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
   session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
@@ -113,68 +118,9 @@ model Event {
   @@index([eventType, timestamp], map: "events_event_type_timestamp_idx")
   @@index([path, timestamp], map: "events_path_timestamp_idx")
   @@index([sessionId, timestamp], map: "events_session_id_timestamp_idx")
+  @@index([propertyId, timestamp], map: "events_property_id_timestamp_idx")
+  @@index([trafficSource, timestamp], map: "events_traffic_source_timestamp_idx")
   @@map("events")
-}
-
-model WebTrafficLog {
-  id                 String        @id @default(uuid())
-  eventId            String?       @unique @map("event_id")
-  visitorId          String        @map("visitor_id")
-  sessionId          String        @map("session_id")
-  eventType          String        @db.VarChar(64) @map("event_type")
-  propertyId         String        @default("default") @db.VarChar(128) @map("property_id")
-  host               String        @db.VarChar(255)
-  path               String        @db.Text
-  referrer           String?       @db.Text
-  referrerHost       String?       @db.VarChar(255) @map("referrer_host")
-  trafficSource      TrafficSource @default(unknown) @map("traffic_source")
-  utmSource          String?       @db.VarChar(255) @map("utm_source")
-  utmMedium          String?       @db.VarChar(255) @map("utm_medium")
-  utmCampaign        String?       @db.VarChar(255) @map("utm_campaign")
-  utmTerm            String?       @db.VarChar(255) @map("utm_term")
-  utmContent         String?       @db.VarChar(255) @map("utm_content")
-  pageTitle          String?       @db.VarChar(512) @map("page_title")
-  language           String?       @db.VarChar(32)
-  deviceType         DeviceType    @default(unknown) @map("device_type")
-  browserName        String?       @db.VarChar(64) @map("browser_name")
-  browserVersion     String?       @db.VarChar(32) @map("browser_version")
-  osName             String?       @db.VarChar(64) @map("os_name")
-  osVersion          String?       @db.VarChar(32) @map("os_version")
-  countryCode        String?       @db.VarChar(2) @map("country_code")
-  region             String?       @db.VarChar(128)
-  city               String?       @db.VarChar(128)
-  timezone           String?       @db.VarChar(64)
-  screenWidth        Int?          @map("screen_width")
-  screenHeight       Int?          @map("screen_height")
-  viewportWidth      Int?          @map("viewport_width")
-  viewportHeight     Int?          @map("viewport_height")
-  engagedTimeMs      Int?          @map("engaged_time_ms")
-  scrollDepthPercent Int?          @map("scroll_depth_percent")
-  fcpMs              Int?          @map("fcp_ms")
-  lcpMs              Int?          @map("lcp_ms")
-  inpMs              Int?          @map("inp_ms")
-  clsScore           Float?        @map("cls_score")
-  ttfbMs             Int?          @map("ttfb_ms")
-  isEntrance         Boolean       @default(false) @map("is_entrance")
-  isExit             Boolean       @default(false) @map("is_exit")
-  isConversion       Boolean       @default(false) @map("is_conversion")
-  ipHash             String?       @db.VarChar(128) @map("ip_hash")
-  uaHash             String?       @db.VarChar(128) @map("ua_hash")
-  occurredAt         DateTime      @default(now()) @map("occurred_at")
-  createdAt          DateTime      @default(now()) @map("created_at")
-
-  event   Event?   @relation(fields: [eventId], references: [id], onDelete: SetNull)
-  visitor Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
-  session Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
-
-  @@index([propertyId, occurredAt], map: "web_traffic_logs_property_id_occurred_at_idx")
-  @@index([host, path, occurredAt], map: "web_traffic_logs_host_path_occurred_at_idx")
-  @@index([trafficSource, occurredAt], map: "web_traffic_logs_traffic_source_occurred_at_idx")
-  @@index([visitorId, occurredAt], map: "web_traffic_logs_visitor_id_occurred_at_idx")
-  @@index([sessionId, occurredAt], map: "web_traffic_logs_session_id_occurred_at_idx")
-  @@index([utmSource, utmMedium, utmCampaign, occurredAt], map: "web_traffic_logs_utm_occurred_at_idx")
-  @@index([deviceType, occurredAt], map: "web_traffic_logs_device_type_occurred_at_idx")
-  @@map("web_traffic_logs")
 }
 
 model Lead {
@@ -248,4 +194,63 @@ model ConsentEvent {
 
   @@index([leadId, timestamp], map: "consent_events_lead_id_timestamp_idx")
   @@map("consent_events")
+}
+
+model IngestRejection {
+  id         String   @id @default(uuid())
+  propertyId String   @db.VarChar(128) @map("property_id")
+  endpoint   String   @db.VarChar(64)
+  reason     String   @db.VarChar(64)
+  statusCode Int      @map("status_code")
+  occurredAt DateTime @default(now()) @map("occurred_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([propertyId, occurredAt], map: "ingest_rejections_property_id_occurred_at_idx")
+  @@index([endpoint, occurredAt], map: "ingest_rejections_endpoint_occurred_at_idx")
+  @@map("ingest_rejections")
+}
+
+model DailyMetricRollup {
+  id                      String   @id @default(uuid())
+  propertyId              String   @db.VarChar(128) @map("property_id")
+  day                     DateTime @db.Date
+  uniqueVisitors          Int      @default(0) @map("unique_visitors")
+  returningVisitors       Int      @default(0) @map("returning_visitors")
+  totalPageViews          Int      @default(0) @map("total_page_views")
+  totalEntrances          Int      @default(0) @map("total_entrances")
+  totalExits              Int      @default(0) @map("total_exits")
+  totalConversions        Int      @default(0) @map("total_conversions")
+  formStarts              Int      @default(0) @map("form_starts")
+  formSubmits             Int      @default(0) @map("form_submits")
+  newLeads                Int      @default(0) @map("new_leads")
+  timeToFirstCaptureSumMs BigInt   @default(0) @map("time_to_first_capture_sum_ms")
+  timeToFirstCaptureCount Int      @default(0) @map("time_to_first_capture_count")
+  trafficSourceBreakdown  Json?    @map("traffic_source_breakdown")
+  topLandingPaths         Json?    @map("top_landing_paths")
+  generatedAt             DateTime @default(now()) @map("generated_at")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+
+  @@unique([propertyId, day], map: "daily_metric_rollups_property_day_key")
+  @@index([day], map: "daily_metric_rollups_day_idx")
+  @@map("daily_metric_rollups")
+}
+
+model DailyIngestRollup {
+  id             String   @id @default(uuid())
+  propertyId     String   @db.VarChar(128) @map("property_id")
+  day            DateTime @db.Date
+  eventsAccepted Int      @default(0) @map("events_accepted")
+  eventsRejected Int      @default(0) @map("events_rejected")
+  leadsAccepted  Int      @default(0) @map("leads_accepted")
+  leadsRejected  Int      @default(0) @map("leads_rejected")
+  p95TtfbMs      Int?     @map("p95_ttfb_ms")
+  errorBreakdown Json?    @map("error_breakdown")
+  generatedAt    DateTime @default(now()) @map("generated_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@unique([propertyId, day], map: "daily_ingest_rollups_property_day_key")
+  @@index([day], map: "daily_ingest_rollups_day_idx")
+  @@map("daily_ingest_rollups")
 }
