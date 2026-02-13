@@ -1,6 +1,6 @@
 export const SELECTORS = {
   container: "face-container",
-  scrubSurface: "body",
+  scrubSurface: "main.container",
   image: "face-image",
   loader: "face-loader",
   metadataPanel: "face-metadata",

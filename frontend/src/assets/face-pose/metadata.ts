@@ -144,7 +144,8 @@ export const parseMetadataItem = (value: unknown): MetadataItem | null => {
   }
   const rawPreloadTier = item.preloadTier;
   const preloadTier =
-    isFiniteNumber(rawPreloadTier) && [0, 1, 2, 3].includes(Math.trunc(rawPreloadTier))
+    isFiniteNumber(rawPreloadTier) &&
+    [0, 1, 2, 3].includes(Math.trunc(rawPreloadTier))
       ? (Math.trunc(rawPreloadTier) as 0 | 1 | 2 | 3)
       : undefined;
 

@@ -13,9 +13,13 @@ export const toSingleSource = (item: MetadataItem): string =>
 export const toAtlasVariantSource = (
   atlas: AtlasPlacement,
   variant: AtlasVariant,
-): string => new URL(`atlases/${atlas.files[variant]}`, document.baseURI).toString();
+): string =>
+  new URL(`atlases/${atlas.files[variant]}`, document.baseURI).toString();
 
-export const toVariantSource = (item: MetadataItem, variant: AtlasVariant): string => {
+export const toVariantSource = (
+  item: MetadataItem,
+  variant: AtlasVariant,
+): string => {
   if (!item.atlas) {
     return toSingleSource(item);
   }
@@ -33,10 +37,6 @@ export const preloadImage = (source: string): Promise<boolean> =>
 
     image.onload = () => {
       cleanup();
-      if (typeof image.decode === "function") {
-        image.decode().catch(() => undefined).finally(() => resolve(true));
-        return;
-      }
       resolve(true);
     };
 
@@ -107,7 +107,10 @@ export const preloadImages = async (
 export const createPreloadPlan = (metadata: MetadataItem[]): PreloadPlan => {
   const hasTierData = metadata.some((item) => item.preloadTier !== undefined);
   if (hasTierData) {
-    const toTierVariantSources = (tier: number, variant: AtlasVariant): string[] => {
+    const toTierVariantSources = (
+      tier: number,
+      variant: AtlasVariant,
+    ): string[] => {
       const sources = new Set<string>();
       for (const item of metadata) {
         const itemTier = item.preloadTier ?? 0;
@@ -198,7 +201,12 @@ export const createPreloadPlan = (metadata: MetadataItem[]): PreloadPlan => {
   const highStage = Array.from(
     new Set(metadata.map((item) => toVariantSource(item, "high"))),
   ).filter((source) => !usedSources.has(source));
-  const upgradeStages = [midStage, highStage].filter((stage) => stage.length > 0);
+  const upgradeStages = [midStage, highStage].filter(
+    (stage) => stage.length > 0,
+  );
 
-  return { blockingSources, backgroundStages: [...backgroundStages, ...upgradeStages] };
+  return {
+    blockingSources,
+    backgroundStages: [...backgroundStages, ...upgradeStages],
+  };
 };

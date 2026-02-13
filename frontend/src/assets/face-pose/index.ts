@@ -1,8 +1,4 @@
-import {
-  POINTER_NOISE_CONFIG,
-  POSE_CONFIG,
-  PRELOAD_CONFIG,
-} from "./config";
+import { POINTER_NOISE_CONFIG, POSE_CONFIG, PRELOAD_CONFIG } from "./config";
 import { createDomFacade } from "./dom";
 import { loadMetadata, loadPoseBounds } from "./metadata";
 import { createPoseIndex } from "./pose-index";
@@ -76,7 +72,9 @@ const derivePoseBounds = (metadata: MetadataItem[]): PoseBounds => {
     maxPitch = Math.max(maxPitch, item.pose.pitch);
 
     const yawCell = Math.round(item.pose.yaw / POSE_CONFIG.coverageCellStep);
-    const pitchCell = Math.round(item.pose.pitch / POSE_CONFIG.coverageCellStep);
+    const pitchCell = Math.round(
+      item.pose.pitch / POSE_CONFIG.coverageCellStep,
+    );
     const cellKey = `${yawCell}:${pitchCell}`;
     const existing = coverageByCell.get(cellKey);
     if (existing) {
@@ -124,8 +122,16 @@ const derivePoseBounds = (metadata: MetadataItem[]): PoseBounds => {
       Number.isFinite(denseMinPitch) &&
       Number.isFinite(denseMaxPitch)
     ) {
-      minYaw = clamp(denseMinYaw, -POSE_CONFIG.maxAbsYaw, POSE_CONFIG.maxAbsYaw);
-      maxYaw = clamp(denseMaxYaw, -POSE_CONFIG.maxAbsYaw, POSE_CONFIG.maxAbsYaw);
+      minYaw = clamp(
+        denseMinYaw,
+        -POSE_CONFIG.maxAbsYaw,
+        POSE_CONFIG.maxAbsYaw,
+      );
+      maxYaw = clamp(
+        denseMaxYaw,
+        -POSE_CONFIG.maxAbsYaw,
+        POSE_CONFIG.maxAbsYaw,
+      );
       minPitch = clamp(
         denseMinPitch,
         -POSE_CONFIG.maxAbsPitch,
@@ -152,8 +158,16 @@ const derivePoseBounds = (metadata: MetadataItem[]): PoseBounds => {
   const pitchPad = (maxPitch - minPitch) * POSE_CONFIG.poseBoundsPaddingRatio;
 
   return {
-    minYaw: clamp(minYaw - yawPad, -POSE_CONFIG.maxAbsYaw, POSE_CONFIG.maxAbsYaw),
-    maxYaw: clamp(maxYaw + yawPad, -POSE_CONFIG.maxAbsYaw, POSE_CONFIG.maxAbsYaw),
+    minYaw: clamp(
+      minYaw - yawPad,
+      -POSE_CONFIG.maxAbsYaw,
+      POSE_CONFIG.maxAbsYaw,
+    ),
+    maxYaw: clamp(
+      maxYaw + yawPad,
+      -POSE_CONFIG.maxAbsYaw,
+      POSE_CONFIG.maxAbsYaw,
+    ),
     minPitch: clamp(
       minPitch - pitchPad,
       -POSE_CONFIG.maxAbsPitch,
@@ -233,7 +247,8 @@ const collectQuadrantHintSources = (
   const pitchSign = pose.pitch >= 0 ? 1 : -1;
   const candidates = metadata
     .filter((item) => {
-      const sameYawQuadrant = yawSign > 0 ? item.pose.yaw >= 0 : item.pose.yaw <= 0;
+      const sameYawQuadrant =
+        yawSign > 0 ? item.pose.yaw >= 0 : item.pose.yaw <= 0;
       const samePitchQuadrant =
         pitchSign > 0 ? item.pose.pitch >= 0 : item.pose.pitch <= 0;
       return sameYawQuadrant && samePitchQuadrant;
@@ -279,7 +294,11 @@ const scheduleCacheWarmHint = (
     return;
   }
 
-  const hintSources = collectQuadrantHintSources(metadata, pose, state.loadedSources);
+  const hintSources = collectQuadrantHintSources(
+    metadata,
+    pose,
+    state.loadedSources,
+  );
   if (hintSources.length === 0) {
     return;
   }
@@ -315,29 +334,29 @@ const initializeFacePose = async (): Promise<void> => {
 
   const preloadPlan = createPreloadPlan(metadata);
 
-  if (PRELOAD_CONFIG.blockUntilComplete) {
-    let lastProgressValue = -1;
-    const preloadResult = await preloadImages(
-      preloadPlan.blockingSources,
-      PRELOAD_CONFIG.maxConcurrent,
-      (summary) => {
-        const progressValue = summary.loaded + summary.failed;
-        if (progressValue === lastProgressValue) {
-          return;
-        }
-        lastProgressValue = progressValue;
-        dom.setLoaderText(`Preloading images... ${progressValue}/${summary.total}`);
-      },
-      (source) => {
-        state.loadedSources.add(source);
-      },
-    );
-
-    if (preloadResult.failed > 0) {
-      console.warn(
-        `Image preload completed with ${preloadResult.failed} failed requests.`,
+  let lastProgressValue = -1;
+  const preloadResult = await preloadImages(
+    preloadPlan.blockingSources,
+    PRELOAD_CONFIG.maxConcurrent,
+    (summary) => {
+      const progressValue = summary.loaded + summary.failed;
+      if (progressValue === lastProgressValue) {
+        return;
+      }
+      lastProgressValue = progressValue;
+      dom.setLoaderText(
+        `Preloading images... ${progressValue}/${summary.total}`,
       );
-    }
+    },
+    (source) => {
+      state.loadedSources.add(source);
+    },
+  );
+
+  if (preloadResult.failed > 0) {
+    console.warn(
+      `Image preload completed with ${preloadResult.failed} failed requests.`,
+    );
   }
 
   const poseIndex = createPoseIndex(metadata);
@@ -358,8 +377,15 @@ const initializeFacePose = async (): Promise<void> => {
   const { updateFace } = createFaceUpdater(dom, state, poseIndex);
   const commandQueue = createPoseCommandQueue(state, updateFace);
 
-  if (dom.container) {
-    dom.container.addEventListener("mousemove", (event: MouseEvent) => {
+  const container = dom.container;
+  if (container) {
+    container.addEventListener("pointerdown", (event: PointerEvent) => {
+      if (event.pointerType !== "mouse") {
+        container.setPointerCapture(event.pointerId);
+      }
+    });
+
+    container.addEventListener("pointermove", (event: PointerEvent) => {
       const rect = dom.getContainerRect();
       if (!rect) {
         return;
@@ -369,7 +395,9 @@ const initializeFacePose = async (): Promise<void> => {
       if (state.lastPointerPose && state.lastPointerAtMs > 0) {
         const yawDelta = pose.yaw - state.lastPointerPose.yaw;
         const pitchDelta = pose.pitch - state.lastPointerPose.pitch;
-        const distance = Math.sqrt(yawDelta * yawDelta + pitchDelta * pitchDelta);
+        const distance = Math.sqrt(
+          yawDelta * yawDelta + pitchDelta * pitchDelta,
+        );
         const elapsedMs = Math.max(1, now - state.lastPointerAtMs);
         state.pointerVelocityDegPerMs = distance / elapsedMs;
       } else {

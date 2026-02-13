@@ -75,7 +75,8 @@ export const createPoseIndex = (metadata: MetadataItem[]): PoseIndex => {
     for (const item of metadata) {
       const yawDistance = item.pose.yaw - yaw;
       const pitchDistance = item.pose.pitch - pitch;
-      const distance = yawDistance * yawDistance + pitchDistance * pitchDistance;
+      const distance =
+        yawDistance * yawDistance + pitchDistance * pitchDistance;
       if (distance < minDistance) {
         minDistance = distance;
         closest = item;
@@ -120,7 +121,8 @@ export const createPoseIndex = (metadata: MetadataItem[]): PoseIndex => {
     for (const candidate of candidates) {
       const yawDistance = candidate.pose.yaw - yaw;
       const pitchDistance = candidate.pose.pitch - pitch;
-      const distanceSq = yawDistance * yawDistance + pitchDistance * pitchDistance;
+      const distanceSq =
+        yawDistance * yawDistance + pitchDistance * pitchDistance;
       const weight = 1 / (1 + distanceSq);
       weightedRoll += candidate.pose.roll * weight;
       weightTotal += weight;
@@ -166,7 +168,9 @@ export const createPoseIndex = (metadata: MetadataItem[]): PoseIndex => {
       ? 0
       : POSE_CONFIG.notLoadedSourcePenalty;
     if (distance > POSE_CONFIG.usagePenaltyDistanceSq) {
-      return distance + rollPenalty + confidencePenalty + recentPenalty + loadPenalty;
+      return (
+        distance + rollPenalty + confidencePenalty + recentPenalty + loadPenalty
+      );
     }
     const usagePenalty = Math.min(
       usage * POSE_CONFIG.usagePenalty,
@@ -189,7 +193,10 @@ export const createPoseIndex = (metadata: MetadataItem[]): PoseIndex => {
       return metadata[0];
     }
 
-    const poolSize = Math.min(scoredCandidates.length, POSE_CONFIG.candidatePoolSize);
+    const poolSize = Math.min(
+      scoredCandidates.length,
+      POSE_CONFIG.candidatePoolSize,
+    );
     const pool = scoredCandidates.slice(0, poolSize);
     const minScore = pool[0].score;
 
@@ -230,7 +237,11 @@ export const createPoseIndex = (metadata: MetadataItem[]): PoseIndex => {
     }
   };
 
-  const pickClosest = (yaw: number, pitch: number, state: RuntimeState): MetadataItem => {
+  const pickClosest = (
+    yaw: number,
+    pitch: number,
+    state: RuntimeState,
+  ): MetadataItem => {
     const bucketYaw = toBucketIndex(yaw, POSE_CONFIG.bucketStep);
     const bucketPitch = toBucketIndex(pitch, POSE_CONFIG.bucketStep);
     const bucketKey = `${bucketYaw}:${bucketPitch}`;
@@ -251,13 +262,16 @@ export const createPoseIndex = (metadata: MetadataItem[]): PoseIndex => {
     const inSameCell = state.poseCellKey === poseCellKey;
     const currentStillCandidate =
       state.currentItem &&
-      candidates.some((candidate) => candidate.file === state.currentItem?.file);
+      candidates.some(
+        (candidate) => candidate.file === state.currentItem?.file,
+      );
     if (
       inSameCell &&
       state.currentItem &&
       currentStillCandidate &&
       (candidates.length === 1 ||
-        nowMs() - state.lastSwitchAt < POSE_CONFIG.sameCellMinSwitchIntervalMs ||
+        nowMs() - state.lastSwitchAt <
+          POSE_CONFIG.sameCellMinSwitchIntervalMs ||
         Math.random() >= POSE_CONFIG.sameCellExploreChance)
     ) {
       return state.currentItem;
@@ -293,11 +307,13 @@ export const createPoseIndex = (metadata: MetadataItem[]): PoseIndex => {
         POSE_CONFIG.minSwitchIntervalMs +
         Math.min(
           POSE_CONFIG.maxVelocitySwitchIntervalBoostMs,
-          state.pointerVelocityDegPerMs * POSE_CONFIG.velocityIntervalBoostFactor,
+          state.pointerVelocityDegPerMs *
+            POSE_CONFIG.velocityIntervalBoostFactor,
         );
       const holdForMargin = scoreGain < POSE_CONFIG.switchMargin;
       const holdForRate =
-        elapsedMs < dynamicMinSwitchIntervalMs && scoreGain < POSE_CONFIG.fastSwitchMargin;
+        elapsedMs < dynamicMinSwitchIntervalMs &&
+        scoreGain < POSE_CONFIG.fastSwitchMargin;
       if (holdForMargin || holdForRate) {
         chosen = state.currentItem;
       }

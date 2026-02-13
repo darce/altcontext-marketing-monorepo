@@ -1,8 +1,8 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Alt Context - Interactive Face Pose</title>
     <style>
       #face-container {
@@ -11,6 +11,7 @@
         aspect-ratio: 1 / 1;
         margin: 0 auto;
         overflow: hidden;
+        touch-action: none;
       }
 
       #face-loader {
@@ -25,24 +26,38 @@
       }
     </style>
     <!-- Critical CSS will be inlined here by build:critcss -->
-    <link rel="stylesheet" href="assets/site.css" media="print" onload="this.media='all'">
-    <noscript><link rel="stylesheet" href="assets/site.css"></noscript>
+    <link
+      rel="stylesheet"
+      href="assets/site.css"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <noscript><link rel="stylesheet" href="assets/site.css" /></noscript>
     <script src="assets/face-pose.js" defer></script>
-</head>
-<body>
+  </head>
+  <body>
     <main class="container">
-        <h1>AltContext.</h1>
-        <h2>Face Recognition for WordPress.</h2>
-        <div class="face-pose-shell">
-            <div id="face-container" class="face-pose-viewer duotone">
-                <img id="face-image" src="" alt="Interactive Face" style="display: none;">
-                <div id="face-loader">Loading metadata...</div>
-            </div>
+      <h1>AltContext.</h1>
+      <h2>Face Recognition for WordPress.</h2>
+      <div class="face-pose-shell">
+        <div id="face-container" class="face-pose-viewer duotone">
+          <img
+            id="face-image"
+            src=""
+            alt="Interactive Face"
+            style="display: none"
+          />
+          <div id="face-loader">Loading metadata...</div>
+        </div>
         <div class="face-metadata-panel">
-            <div class="face-metadata-header"><span id="face-metadata-title">Loading name...</span></div>
-            <pre id="face-metadata" class="face-metadata-copy">Loading metadata...</pre>
+          <div class="face-metadata-header">
+            <span id="face-metadata-title">Loading name...</span>
+          </div>
+          <pre id="face-metadata" class="face-metadata-copy">
+Loading metadata...</pre
+          >
         </div>
-        </div>
+      </div>
     </main>
-</body>
+  </body>
 </html>

@@ -103,7 +103,10 @@ export const createFaceUpdater = (
           return;
         }
 
-        const resolved = resolveImageSource(state.currentItem, state.loadedSources);
+        const resolved = resolveImageSource(
+          state.currentItem,
+          state.loadedSources,
+        );
         if (resolved.source !== source) {
           return;
         }
