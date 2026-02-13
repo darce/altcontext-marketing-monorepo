@@ -35,3 +35,9 @@ body {
   margin: 0 auto;
   padding: tokens.$space-md;
 }
+
+// Defensive override in case of caching issues
+header.container {
+  height: auto !important;
+  display: block;
+}
