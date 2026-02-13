@@ -37,7 +37,7 @@
   line-height: 1.3;
   overflow: auto;
   white-space: pre-wrap;
-  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .face-pose-viewer {
@@ -53,6 +53,7 @@
   align-items: center;
   justify-content: center;
   cursor: crosshair;
+  touch-action: none;
   box-shadow: $shadow-inset-outline, $shadow-viewer-depth;
 }
 
@@ -132,11 +133,11 @@
 .duotone::before {
   background-color: $color-duotone-shadow; /* Shadow tone */
   opacity: $opacity-duotone-shadow;
-  mix-blend-mode: multiply;   /* Darkens shadows */
+  mix-blend-mode: multiply; /* Darkens shadows */
 }
 
 .duotone::after {
   background-color: $color-duotone-highlight; /* Highlight tone */
   opacity: $opacity-duotone-highlight;
-  mix-blend-mode: screen;     /* Lightens highlights */
+  mix-blend-mode: screen; /* Lightens highlights */
 }

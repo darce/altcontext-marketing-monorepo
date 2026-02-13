@@ -9,8 +9,17 @@ $radius-md: 10px;
 $radius-sm: 6px;
 
 // Typography
-$font-body: "Geist", system-ui, -apple-system, sans-serif;
-$font-display: "Geist Pixel Square", "Geist", system-ui, -apple-system, sans-serif;
+$font-body:
+  "Geist",
+  system-ui,
+  -apple-system,
+  sans-serif;
+$font-display:
+  "Geist Pixel Square",
+  "Geist",
+  system-ui,
+  -apple-system,
+  sans-serif;
 
 // Colors
 $color-duotone-shadow: #118300;
@@ -22,13 +31,14 @@ $color-border: #2a2a2a;
 $color-text-muted: #888;
 $color-text-soft: #f7f7f7;
 $color-text-loader: #7b7b7b;
-$color-overlay-strong: rgba(0, 0, 0, 0.6);
+$color-overlay-strong: rgb(0 0 0 / 60%);
 $opacity-duotone-shadow: 0.92;
 $opacity-duotone-highlight: 0.28;
 $color-bg-duotone-match: #75995f;
 $color-duotone-shadow-match: #3b1e35;
 $color-bg: $color-bg-duotone-match;
+
 // Effects
-$shadow-inset-outline: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-$shadow-panel-depth: inset 0 -1.5rem 2rem rgba(0, 0, 0, 0.5);
-$shadow-viewer-depth: inset 0 -2rem 3.5rem rgba(0, 0, 0, 0.45);
+$shadow-inset-outline: inset 0 0 0 1px rgb(255 255 255 / 4%);
+$shadow-panel-depth: inset 0 -1.5rem 2rem rgb(0 0 0 / 50%);
+$shadow-viewer-depth: inset 0 -2rem 3.5rem rgb(0 0 0 / 45%);

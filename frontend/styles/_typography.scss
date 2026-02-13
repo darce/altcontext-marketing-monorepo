@@ -2,7 +2,7 @@
 @use "tokens";
 
 @font-face {
-  font-family: "Geist";
+  font-family: Geist;
   font-style: normal;
   font-display: swap;
   font-weight: 100 900;
@@ -24,7 +24,6 @@ h1 {
   font-weight: 800;
   margin: 0 0 tokens.$space-sm;
 }
-
 
 h2 {
   font-size: 3rem;
