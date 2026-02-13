@@ -216,76 +216,74 @@ const dampedYaw = yaw * (1 - edgeProximity * EDGE_DAMPING_FACTOR);
 
 ### Phase 1a: Split `prepare-derivatives.ts` into modules
 
-- [ ] **Create `build/derivatives/types.ts`**: Extract all interfaces and type aliases. Every other module imports from here.
-- [ ] **Create `build/derivatives/cli.ts`**: Extract `getArgValue`, `getVerbose`, `getSubsetPrefixes`, `getLimit`, `getRecropMode`, `getBuildOptions`, `normalizeSubsetToken`.
-- [ ] **Create `build/derivatives/metadata-io.ts`**: Extract `parseSourceMetadata`, `parseSourceMetadataItem`, all `require*`/`read*` field helpers, `readOptionalString`, `sortSourceItems`, `writeRuntimeMetadata`.
-- [ ] **Create `build/derivatives/crop.ts`**: Extract `computeCrop`, `mapPointToCrop`, `mapRegionToCrop`, `computeRuntimeTransform`, `buildRuntimeMetadata`, `pointToPixels`, `clamp`, `roundTo`, `dist`, geometry constants.
-- [ ] **Create `build/derivatives/renderer.ts`**: Extract `createBrowserRenderer`, `bakeAlignedDerivative`, `renderCroppedDerivative`, `encodeDerivativeWebp`, `toRuntimeTransformCss`, `CANVAS_TEMPLATE`, and image processing constants.
-- [ ] **Create `build/derivatives/atlas.ts`**: Extract `buildAtlases`, `buildAtlasVariant`, `buildPreloadTierByFile`, `buildRepresentativeFileSet`, `attachAtlasPlacements`, `logPreloadTierSummary`, atlas constants.
-- [ ] **Slim `prepare-derivatives.ts`**: Keep `main()`, `processSourceItems`, `selectSourceItems`, `prepareOutputDirectory`, logging helpers. Import everything else.
-- [ ] **Verify**: `npm run build:data:derive` and `npm run typecheck:tools` pass unchanged.
+- [x] **Create `build/derivatives/types.ts`**: Extract all interfaces and type aliases. Every other module imports from here.
+- [x] **Create `build/derivatives/cli.ts`**: Extract `getArgValue`, `getVerbose`, `getSubsetPrefixes`, `getLimit`, `getRecropMode`, `getBuildOptions`, `normalizeSubsetToken`.
+- [x] **Create `build/derivatives/metadata-io.ts`**: Extract `parseSourceMetadata`, `parseSourceMetadataItem`, all `require*`/`read*` field helpers, `readOptionalString`, `sortSourceItems`, `writeRuntimeMetadata`.
+- [x] **Create `build/derivatives/crop.ts`**: Extract `computeCrop`, `mapPointToCrop`, `mapRegionToCrop`, `computeRuntimeTransform`, `buildRuntimeMetadata`, `pointToPixels`, `clamp`, `roundTo`, `dist`, geometry constants.
+- [x] **Create `build/derivatives/renderer.ts`**: Extract `createBrowserRenderer`, `bakeAlignedDerivative`, `renderCroppedDerivative`, `encodeDerivativeWebp`, `toRuntimeTransformCss`, `CANVAS_TEMPLATE`, and image processing constants.
+- [x] **Create `build/derivatives/atlas.ts`**: Extract `buildAtlases`, `buildAtlasVariant`, `buildPreloadTierByFile`, `buildRepresentativeFileSet`, `attachAtlasPlacements`, `logPreloadTierSummary`, atlas constants.
+- [x] **Slim `prepare-derivatives.ts`**: Keep `main()`, `processSourceItems`, `selectSourceItems`, `prepareOutputDirectory`, logging helpers. Import everything else.
+- [x] **Verify**: `npm run build:data:derive` and `npm run typecheck:tools` pass unchanged.
 
 ### Phase 1b: Split `face-pose.ts` with esbuild
 
-- [ ] **Add `esbuild` dev dependency**: `npm install --save-dev esbuild`.
-- [ ] **Update `build:assets:scripts`**: Replace `tsc -p tsconfig.runtime.json` with esbuild command targeting `src/assets/face-pose/index.ts` → `dist/assets/face-pose.js` as IIFE.
-- [ ] **Keep `typecheck:runtime`**: `tsc -p tsconfig.runtime.json --noEmit` remains the type-checker.
-- [ ] **Create `src/assets/face-pose/types.ts`**: Extract all interfaces and type aliases.
-- [ ] **Create `src/assets/face-pose/config.ts`**: Extract `POSE_CONFIG`, `PRELOAD_CONFIG`, `POINTER_NOISE_CONFIG`, `SELECTORS`, `METADATA_ERROR_HINT`.
-- [ ] **Create `src/assets/face-pose/metadata.ts`**: Extract `loadMetadata`, `parseMetadataItem`, `parseAtlasPlacement`, `parseAtlasFiles`, `asRecord`.
-- [ ] **Create `src/assets/face-pose/preload.ts`**: Extract `preloadImage`, `preloadImages`, `createPreloadPlan`.
-- [ ] **Create `src/assets/face-pose/pose-index.ts`**: Extract `createPoseIndex` and all internal helpers (`scoreCandidate`, `collectNearbyCandidates`, etc.).
-- [ ] **Create `src/assets/face-pose/dom.ts`**: Extract `createDomFacade`.
-- [ ] **Create `src/assets/face-pose/updater.ts`**: Extract `createFaceUpdater`, `createPoseCommandQueue`, `resolveImageSource`, `toTransformCss`, `toAtlasTileTransformCss`, `waitForImageReady`.
-- [ ] **Create `src/assets/face-pose/index.ts`**: Keep `initializeFacePose`, pointer wiring, background preload orchestration.
-- [ ] **Verify**: Output `dist/assets/face-pose.js` is a single IIFE, compressed size ≤ 8KB brotli, `typecheck:runtime` passes.
+- [x] **Add `esbuild` dev dependency**: `npm install --save-dev esbuild`.
+- [x] **Update `build:assets:scripts`**: Replace `tsc -p tsconfig.runtime.json` with esbuild command targeting `src/assets/face-pose/index.ts` → `dist/assets/face-pose.js` as IIFE.
+- [x] **Keep `typecheck:runtime`**: `tsc -p tsconfig.runtime.json --noEmit` remains the type-checker.
+- [x] **Create `src/assets/face-pose/types.ts`**: Extract all interfaces and type aliases.
+- [x] **Create `src/assets/face-pose/config.ts`**: Extract `POSE_CONFIG`, `PRELOAD_CONFIG`, `POINTER_NOISE_CONFIG`, `SELECTORS`, `METADATA_ERROR_HINT`.
+- [x] **Create `src/assets/face-pose/metadata.ts`**: Extract `loadMetadata`, `parseMetadataItem`, `parseAtlasPlacement`, `parseAtlasFiles`, `asRecord`.
+- [x] **Create `src/assets/face-pose/preload.ts`**: Extract `preloadImage`, `preloadImages`, `createPreloadPlan`.
+- [x] **Create `src/assets/face-pose/pose-index.ts`**: Extract `createPoseIndex` and all internal helpers (`scoreCandidate`, `collectNearbyCandidates`, etc.).
+- [x] **Create `src/assets/face-pose/dom.ts`**: Extract `createDomFacade`.
+- [x] **Create `src/assets/face-pose/updater.ts`**: Extract `createFaceUpdater`, `createPoseCommandQueue`, `resolveImageSource`, `toTransformCss`, `toAtlasTileTransformCss`, `waitForImageReady`.
+- [x] **Create `src/assets/face-pose/index.ts`**: Keep `initializeFacePose`, pointer wiring, background preload orchestration.
+- [x] **Verify**: Output `dist/assets/face-pose.js` is a single IIFE, compressed size ≤ 8KB brotli, `typecheck:runtime` passes.
 
 ### Phase 1c: Runtime hot-path changes (within the now-split modules)
 
-- [ ] **Sync frame update**: Refactor `updateFace` in `updater.ts` to be synchronous when the resolved source is already in `loadedSources`. Only fall back to async load if the source is genuinely uncached.
-- [ ] **Remove floating promise in flush**: Make `createPoseCommandQueue.flush` in `updater.ts` call the synchronous path directly instead of `void updateFace(...)`.
-- [ ] **Token simplification**: Remove the `token` increment / stale-check pattern for the sync path. Keep it only for the async fallback in `updater.ts`.
-- [ ] **Image rendering mode fix**: Set `imageRendering: "auto"` in `updater.ts` when source is a `high` variant; keep `"pixelated"` only for `low`/`mid`.
-- [ ] **Variant-aware source resolution**: Extend `resolveImageSource` in `updater.ts` to return `{ source, variant }` so callers can avoid redundant source swaps when variant changes but the metadata item hasn't.
-- [ ] **Same-item fast path**: When `pickClosest` returns the same item as `state.currentItem` and the source hasn't changed, skip all DOM operations entirely in `updater.ts`.
-- [ ] **Edge-aware pose mapping**: Add non-linear mapping in `toPoseFromPointer` in `index.ts` that compresses the outer 15% of viewport into a smaller pose range, preventing rapid jumps through sparse edge regions.
-- [ ] **Velocity-based switch damping**: Increase `minSwitchIntervalMs` dynamically in `pose-index.ts` when pointer velocity is high (fast scrubbing), reducing unnecessary mid-scrub switches.
+- [x] **Sync frame update**: Refactor `updateFace` in `updater.ts` to be synchronous when the resolved source is already in `loadedSources`. Only fall back to async load if the source is genuinely uncached.
+- [x] **Remove floating promise in flush**: Make `createPoseCommandQueue.flush` in `updater.ts` call the synchronous path directly instead of `void updateFace(...)`.
+- [x] **Token simplification**: Remove the `token` increment / stale-check pattern for the sync path. Keep it only for the async fallback in `updater.ts`.
+- [x] **Image rendering mode fix**: Set `imageRendering: "auto"` in `updater.ts` when source is a `high` variant; keep `"pixelated"` only for `low`/`mid`.
+- [x] **Variant-aware source resolution**: Extend `resolveImageSource` in `updater.ts` to return `{ source, variant }` so callers can avoid redundant source swaps when variant changes but the metadata item hasn't.
+- [x] **Same-item fast path**: When `pickClosest` returns the same item as `state.currentItem` and the source hasn't changed, skip all DOM operations entirely in `updater.ts`.
+- [x] **Edge-aware pose mapping**: Add non-linear mapping in `toPoseFromPointer` in `index.ts` that compresses the outer 15% of viewport into a smaller pose range, preventing rapid jumps through sparse edge regions.
+- [x] **Velocity-based switch damping**: Increase `minSwitchIntervalMs` dynamically in `pose-index.ts` when pointer velocity is high (fast scrubbing), reducing unnecessary mid-scrub switches.
 
 ## Phase 2: Build-Time Alignment Quality (Reduces spatial jitter between frames)
 
-- [ ] **Alignment verification pass**: After `bakeAlignedDerivative`, read back the output tile and measure actual eye midpoint position. Log/warn items with >2px deviation from target anchor.
-- [ ] **Subpixel alignment**: In `CANVAS_TEMPLATE`, enable `ctx.imageSmoothingQuality = "high"` and use a `translate(0.5, 0.5)` offset to align to pixel grid before applying the alignment matrix.
-- [ ] **Landmark noise reduction in `analyze-faces.py`**: For images re-analyzed with `--only-missing=false`, run MediaPipe detection at 2× resolution and average landmark positions to reduce per-frame noise.
-- [ ] **Emit alignment confidence**: Add an `alignmentScore` field to `RuntimeMetadataItem` computed from the deviation of baked eye positions vs. target anchor. Runtime can use this to prefer high-confidence items.
-- [ ] **Tighten WebP quality for critical features**: Increase `DERIVATIVE_WEBP_QUALITY` from 42 to 50 for tiles where the eye region crosses a block boundary (measurable at build time), reducing compression-induced eye-position shift.
+- [x] **Alignment verification pass**: After `bakeAlignedDerivative`, read back the output tile and measure actual eye midpoint position. Log/warn items with >2px deviation from target anchor.
+- [x] **Subpixel alignment**: In `CANVAS_TEMPLATE`, enable `ctx.imageSmoothingQuality = "high"` and use a `translate(0.5, 0.5)` offset to align to pixel grid before applying the alignment matrix.
+- [x] **Landmark noise reduction in `analyze-faces.py`**: For images re-analyzed with `--only-missing=false`, run MediaPipe detection at 2× resolution and average landmark positions to reduce per-frame noise.
+- [x] **Emit alignment confidence**: Add an `alignmentScore` field to `RuntimeMetadataItem` computed from the deviation of baked eye positions vs. target anchor. Runtime can use this to prefer high-confidence items.
+- [x] **Tighten WebP quality for critical features**: Increase `DERIVATIVE_WEBP_QUALITY` from 42 to 50 for tiles where the eye region crosses a block boundary (measurable at build time), reducing compression-induced eye-position shift.
 
 ## Phase 3: Coverage Gap Filling (Addresses sparse edges)
 
-- [ ] **Split `analyze-faces.py`**: Extract `face_metrics.py` (pure `compute_face_metrics`, `get_euler_angles`, `FaceMetrics` dataclass) and `xmp_io.py` (`generate_xmp`, `inject_xmp`, `append_xmp_payload`, `write_xmp_to_source`). Keep `analyze_faces.py` as the CLI entrypoint with detection and orchestration.
-- [ ] **Horizontal mirror generation in `analyze-faces.py`**: Add `--mirror` flag. For each processed image, also emit a horizontally flipped copy with negated yaw and roll, swapped left/right landmarks. Store with `_mirror` suffix.
-- [ ] **Mirror-aware derivative pipeline**: In `prepare-derivatives.ts`, when mirror source metadata is present, generate flipped derivatives using `magick -flop` before the alignment pass.
-- [ ] **Pose gap analysis**: Add a build-time step that identifies 5°×5° yaw/pitch cells with zero coverage and reports them. Use this to prioritize which source images to mirror.
-- [ ] **Conditional mirroring**: Only create mirrors for items whose mirrored pose falls in a cell with fewer than N existing items (e.g., N=3), avoiding bloating dense center regions.
-- [ ] **Pose bounds tightening**: In `derivePoseBounds`, clamp to the range where coverage density exceeds a minimum threshold (e.g., ≥2 items per 5° cell), so the viewer doesn't map to unreachable poses.
-- [ ] **Soft edge fade**: Add CSS vignette or opacity reduction at the viewer's border zones that correspond to sparse coverage, visually signaling "end of range."
+- [x] **Split `analyze-faces.py`**: Extract `face_metrics.py` (pure `compute_face_metrics`, `get_euler_angles`, `FaceMetrics` dataclass) and `xmp_io.py` (`generate_xmp`, `inject_xmp`, `append_xmp_payload`, `write_xmp_to_source`). Keep `analyze_faces.py` as the CLI entrypoint with detection and orchestration.
+- [x] **Horizontal mirror generation in `analyze-faces.py`**: Add `--mirror` flag. For each processed image, also emit a horizontally flipped copy with negated yaw and roll, swapped left/right landmarks. Store with `_mirror` suffix.
+- [x] **Mirror-aware derivative pipeline**: In `prepare-derivatives.ts`, when mirror source metadata is present, generate flipped derivatives using `magick -flop` before the alignment pass.
+- [x] **Pose gap analysis**: Add a build-time step that identifies 5°×5° yaw/pitch cells with zero coverage and reports them. Use this to prioritize which source images to mirror.
+- [x] **Conditional mirroring**: Only create mirrors for items whose mirrored pose falls in a cell with fewer than N existing items (e.g., N=3), avoiding bloating dense center regions.
+- [x] **Pose bounds tightening**: In `derivePoseBounds`, clamp to the range where coverage density exceeds a minimum threshold (e.g., ≥2 items per 5° cell), so the viewer doesn't map to unreachable poses.
 
 ## Phase 4: Progressive Resolution & Polish
 
-- [ ] **Increase low atlas tile size**: Change `PROGRESSIVE_ATLAS_VARIANTS[0].tileSize` from 64 to 128. This doubles low-res clarity with modest atlas size increase (~4× per tile, mitigated by higher compressibility at larger tile size).
-- [ ] **Mid-frame resolution upgrade**: After applying a low-res frame synchronously, schedule a microtask to swap to the mid/high variant of the same item without changing the CSS transform. This produces a "sharpen" effect rather than a jarring swap.
-- [ ] **Preload tier rebalance**: With mirrors and better coverage, rebalance `PRELOAD_TIER_STEPS` to ensure tier-3 covers representative poses at ~10° spacing instead of the current 3° that pulls 842 items into blocking preload.
-- [ ] **Cache-warm hinting**: After initial interaction, prefetch atlas variants for the quadrant of pose space the user is trending toward, based on recent pointer velocity direction.
+- [x] **Increase low atlas tile size**: Change `PROGRESSIVE_ATLAS_VARIANTS[0].tileSize` from 64 to 128. This doubles low-res clarity with modest atlas size increase (~4× per tile, mitigated by higher compressibility at larger tile size).
+- [x] **Mid-frame resolution upgrade**: After applying a low-res frame synchronously, schedule a microtask to swap to the mid/high variant of the same item without changing the CSS transform. This produces a "sharpen" effect rather than a jarring swap.
+- [x] **Preload tier rebalance**: With mirrors and better coverage, rebalance `PRELOAD_TIER_STEPS` to ensure tier-3 covers representative poses at ~10° spacing instead of the current 3° that pulls 842 items into blocking preload.
+- [x] **Cache-warm hinting**: After initial interaction, prefetch atlas variants for the quadrant of pose space the user is trending toward, based on recent pointer velocity direction.
 
 ## Phase 5: Tests & Validation
 
-- [ ] **Eye-anchor stability test**: Build-time script that loads each output tile, detects eyes (via OpenCV), and asserts midpoint is within 3px of `(OUTPUT_SIZE * 0.5, OUTPUT_SIZE * 0.44)`.
+- [ ] **Eye-anchor stability test**: Build-time script that loads each output tile, detects eye landmarks (via MediaPipe Face Landmarker — the same model used in `analyze-faces.py`), and asserts the midpoint between outer eye landmarks is within 3px of `(OUTPUT_SIZE * 0.5, OUTPUT_SIZE * 0.44)`.
 - [ ] **Pose coverage report**: CI step that generates a yaw×pitch heatmap from `metadata.json` and fails if any 10° cell within the interactive bounds has zero items.
 - [ ] **Frame-rate benchmark**: Puppeteer-based test that scrubs the viewer at 60fps mouse-move rate and asserts zero dropped CSS transform applications over 5 seconds.
 - [ ] **Visual regression snapshots**: Capture the viewer at 9 canonical poses (center + 8 compass points at 80% range) and compare against known-good baselines.
 
 ## Stretch Goals
 
-- [ ] **Pose interpolation**: For sparse regions, blend two nearby tiles using CSS opacity crossfade (two `<img>` elements) weighted by pose distance. This would smooth transitions without needing more source imagery.
 - [ ] **Touch/gyroscope input**: Map `deviceorientation` events to pose commands for mobile tilt interaction.
 - [ ] **WebGL atlas rendering**: Replace CSS transform-based atlas tile extraction with a single WebGL quad that samples directly from the atlas texture, eliminating large-image layout overhead.
 - [ ] **Adaptive tile resolution**: Serve 320px tiles on mobile (< 768px viewport) and 640px on desktop, halving mobile payload.
