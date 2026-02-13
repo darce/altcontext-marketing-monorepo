@@ -55,12 +55,12 @@ test("parseEnvironment handles boolean coercion flags", () => {
 test("parseEnvironment parses comma-separated CORS origins", () => {
   const parsed = parseEnvironment({
     ...baseEnv,
-    CORS_ALLOWED_ORIGINS: "https://altcontext.dev, https://www.altcontext.dev ",
+    CORS_ALLOWED_ORIGINS: "https://altcontext.com, https://www.altcontext.com ",
   });
 
   assert.deepEqual(parsed.CORS_ALLOWED_ORIGINS, [
-    "https://altcontext.dev",
-    "https://www.altcontext.dev",
+    "https://altcontext.com",
+    "https://www.altcontext.com",
   ]);
 });
 
