@@ -1,0 +1,13 @@
+{
+  "inputDir": "/Users/daniel/Development/altcontext-marketing-monorepo/frontend/input-images",
+  "totalImagesProcessed": 2327,
+  "noFaceCount": 0,
+  "lowConfidenceCount": 0,
+  "deletionCandidateCount": 0,
+  "deletionCandidates": [],
+  "byCategory": {
+    "noFaceOrDetectionError": [],
+    "lowLandmarkConfidence": []
+  },
+  "errorTypes": {}
+}
