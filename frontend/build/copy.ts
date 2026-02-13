@@ -5,8 +5,11 @@ import process from "node:process";
 const SRC_DIR = "./src";
 const PUBLIC_DIR = "./public";
 const DIST_DIR = "./dist";
-const PUBLIC_IMAGE_DIR = path.join(PUBLIC_DIR, "input-images");
-const PUBLIC_RUNTIME_METADATA = path.join(PUBLIC_DIR, "metadata.json");
+const GENERATED_DIR = "./build/generated";
+const PROCESSED_IMAGE_DIR = path.join("offline-scripts", "processed-images");
+const GENERATED_RUNTIME_METADATA = path.join(GENERATED_DIR, "metadata.json");
+const GENERATED_ATLAS_DIR = path.join(GENERATED_DIR, "atlases");
+const GENERATED_POSE_BOUNDS = path.join(GENERATED_DIR, "pose-bounds.json");
 const VERBOSE =
   process.argv.includes("--verbose") || process.env.BUILD_VERBOSE === "1";
 
@@ -41,39 +44,59 @@ const ensureDir = (dirPath: string): void => {
   }
 };
 
-const copyRecursive = (src: string, dest: string): void => {
+const removeIfExists = (targetPath: string): void => {
+  if (fs.existsSync(targetPath)) {
+    fs.rmSync(targetPath, { recursive: true, force: true });
+  }
+};
+
+const copyRecursive = (src: string, dest: string): boolean => {
   if (!fs.existsSync(src)) {
-    return;
+    return false;
   }
 
   const stats = fs.statSync(src);
   if (stats.isDirectory()) {
-    ensureDir(dest);
+    let copiedChildren = false;
     const children = fs.readdirSync(src).sort();
     for (const child of children) {
-      copyRecursive(path.join(src, child), path.join(dest, child));
+      copiedChildren =
+        copyRecursive(path.join(src, child), path.join(dest, child)) ||
+        copiedChildren;
     }
-    return;
+    return copiedChildren;
   }
 
   if (isSourceTypeScriptAsset(src)) {
     if (VERBOSE) {
       console.log(`🧩 Skipped TS source asset (compiled separately): ${src}`);
     }
-    return;
+    return false;
   }
 
   ensureDir(path.dirname(dest));
   fs.copyFileSync(src, dest);
+  return true;
 };
 
 const copyPublicNonImageAssets = (): void => {
   const entries = fs.readdirSync(PUBLIC_DIR).sort();
+  const excludedPublicEntries = new Set([
+    "input-images",
+    "metadata-source.json",
+    "metadata.json",
+    "metadata-subset.json",
+    "pose-bounds.json",
+    "pose-bounds-subset.json",
+    "atlases",
+    "atlases-subset",
+    "missing-pose-metadata.json",
+    "unusable-atlas-sources.json",
+    "unusable-atlas-sources-subset.json",
+    "unusable-images-report.json",
+  ]);
   for (const entry of entries) {
-    if (entry === "input-images") {
-      continue;
-    }
-    if (entry === "metadata-source.json") {
+    if (excludedPublicEntries.has(entry)) {
       continue;
     }
 
@@ -85,11 +108,11 @@ const copyPublicNonImageAssets = (): void => {
 };
 
 const parseRuntimeMetadata = (): RuntimeMetadataEntry[] => {
-  const raw = fs.readFileSync(PUBLIC_RUNTIME_METADATA, "utf8");
+  const raw = fs.readFileSync(GENERATED_RUNTIME_METADATA, "utf8");
   const parsed: unknown = JSON.parse(raw);
 
   if (!Array.isArray(parsed)) {
-    throw new Error(`Invalid metadata format in ${PUBLIC_RUNTIME_METADATA}.`);
+    throw new Error(`Invalid metadata format in ${GENERATED_RUNTIME_METADATA}.`);
   }
 
   return parsed.map((entry, index) => {
@@ -100,7 +123,7 @@ const parseRuntimeMetadata = (): RuntimeMetadataEntry[] => {
       typeof (entry as { file?: unknown }).file !== "string"
     ) {
       throw new Error(
-        `Invalid metadata[${index}] in ${PUBLIC_RUNTIME_METADATA}: expected object with file`,
+        `Invalid metadata[${index}] in ${GENERATED_RUNTIME_METADATA}: expected object with file`,
       );
     }
 
@@ -117,7 +140,7 @@ const parseRuntimeMetadata = (): RuntimeMetadataEntry[] => {
       Array.isArray(atlasRaw)
     ) {
       throw new Error(
-        `Invalid metadata[${index}].atlas in ${PUBLIC_RUNTIME_METADATA}: expected object`,
+        `Invalid metadata[${index}].atlas in ${GENERATED_RUNTIME_METADATA}: expected object`,
       );
     }
 
@@ -133,7 +156,7 @@ const parseRuntimeMetadata = (): RuntimeMetadataEntry[] => {
       typeof (atlasFiles as { high?: unknown }).high === "string";
     if (!hasLegacyFile && !hasProgressiveFiles) {
       throw new Error(
-        `Invalid metadata[${index}].atlas in ${PUBLIC_RUNTIME_METADATA}: expected file or files.{low,mid,high}`,
+        `Invalid metadata[${index}].atlas in ${GENERATED_RUNTIME_METADATA}: expected file or files.{low,mid,high}`,
       );
     }
 
@@ -153,9 +176,9 @@ const parseRuntimeMetadata = (): RuntimeMetadataEntry[] => {
 };
 
 const copyReferencedImages = (): void => {
-  if (!fs.existsSync(PUBLIC_RUNTIME_METADATA)) {
+  if (!fs.existsSync(GENERATED_RUNTIME_METADATA)) {
     throw new Error(
-      `Missing ${PUBLIC_RUNTIME_METADATA}. Run build:derivatives first.`,
+      `Missing ${GENERATED_RUNTIME_METADATA}. Run build:derivatives first.`,
     );
   }
 
@@ -176,9 +199,9 @@ const copyReferencedImages = (): void => {
     return;
   }
 
-  if (!fs.existsSync(PUBLIC_IMAGE_DIR)) {
+  if (!fs.existsSync(PROCESSED_IMAGE_DIR)) {
     throw new Error(
-      `Missing ${PUBLIC_IMAGE_DIR}. Run build:derivatives first.`,
+      `Missing ${PROCESSED_IMAGE_DIR}. Run build:derivatives first.`,
     );
   }
 
@@ -186,7 +209,7 @@ const copyReferencedImages = (): void => {
 
   let totalBytes = 0;
   for (const file of uniqueFiles) {
-    const srcPath = path.join(PUBLIC_IMAGE_DIR, file);
+    const srcPath = path.join(PROCESSED_IMAGE_DIR, file);
     const dstPath = path.join(distImageDir, file);
     if (!fs.existsSync(srcPath)) {
       throw new Error(`Referenced image missing: ${srcPath}`);
@@ -207,6 +230,68 @@ const copyReferencedImages = (): void => {
   );
 };
 
+const copyGeneratedRuntimeArtifacts = (): void => {
+  if (!fs.existsSync(GENERATED_RUNTIME_METADATA)) {
+    throw new Error(
+      `Missing ${GENERATED_RUNTIME_METADATA}. Run build:derivatives first.`,
+    );
+  }
+
+  copyRecursive(GENERATED_RUNTIME_METADATA, path.join(DIST_DIR, "metadata.json"));
+  if (VERBOSE) {
+    console.log("🧠 Copied generated runtime metadata to dist/metadata.json");
+  }
+
+  if (fs.existsSync(GENERATED_POSE_BOUNDS)) {
+    copyRecursive(GENERATED_POSE_BOUNDS, path.join(DIST_DIR, "pose-bounds.json"));
+    if (VERBOSE) {
+      console.log("🧭 Copied generated pose bounds to dist/pose-bounds.json");
+    }
+  }
+
+  const distAtlasDir = path.join(DIST_DIR, "atlases");
+  if (fs.existsSync(distAtlasDir)) {
+    fs.rmSync(distAtlasDir, { recursive: true, force: true });
+  }
+  if (!fs.existsSync(GENERATED_ATLAS_DIR)) {
+    throw new Error(
+      `Missing ${GENERATED_ATLAS_DIR}. Run build:derivatives first.`,
+    );
+  }
+  copyRecursive(GENERATED_ATLAS_DIR, distAtlasDir);
+  if (VERBOSE) {
+    console.log("🗂️ Copied generated atlases to dist/atlases");
+  }
+};
+
+const removeStaleBuildOnlyDistArtifacts = (): void => {
+  const staleFiles = [
+    "unusable-images-report.json",
+    "unusable-images-report.json.br",
+    "unusable-images-report.json.gz",
+  ];
+  for (const file of staleFiles) {
+    removeIfExists(path.join(DIST_DIR, file));
+  }
+};
+
+const removeEmptyLegacyRuntimeDirectories = (): void => {
+  const legacyFacePoseDir = path.join(DIST_DIR, "assets", "face-pose");
+  if (!fs.existsSync(legacyFacePoseDir)) {
+    return;
+  }
+
+  const stats = fs.statSync(legacyFacePoseDir);
+  if (!stats.isDirectory()) {
+    return;
+  }
+
+  const entries = fs.readdirSync(legacyFacePoseDir);
+  if (entries.length === 0) {
+    fs.rmdirSync(legacyFacePoseDir);
+  }
+};
+
 const main = (): void => {
   try {
     if (VERBOSE) {
@@ -216,7 +301,10 @@ const main = (): void => {
 
     copyRecursive(SRC_DIR, DIST_DIR);
     copyPublicNonImageAssets();
+    copyGeneratedRuntimeArtifacts();
     copyReferencedImages();
+    removeStaleBuildOnlyDistArtifacts();
+    removeEmptyLegacyRuntimeDirectories();
 
     console.log("✅ Assets copied to dist/");
   } catch (error) {
