@@ -4,17 +4,18 @@
 @use "typography";
 @use "face-pose";
 @use "email-capture";
-// Layout primitives
 
+// Layout primitives
 // stylelint-disable-next-line media-feature-range-notation
 @media (max-width: 30rem) {
-
   html,
   body {
     height: 100dvh;
     overflow: hidden;
     overscroll-behavior: none;
     -webkit-overflow-scrolling: auto;
+    display: flex;
+    flex-direction: column;
   }
 }
 
@@ -33,12 +34,4 @@ body {
   max-width: tokens.$layout-max-width;
   margin: 0 auto;
   padding: tokens.$space-md;
-
-  // stylelint-disable-next-line media-feature-range-notation
-  @media (max-width: 30rem) {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-  }
 }

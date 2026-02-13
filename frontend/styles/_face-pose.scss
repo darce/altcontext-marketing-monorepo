@@ -86,10 +86,12 @@
       content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(to bottom,
-          rgb(0 0 0 / 40%) 0%,
-          rgb(0 0 0 / 20%) 50%,
-          rgb(0 0 0 / 60%) 100%);
+      background: linear-gradient(
+        to bottom,
+        rgb(0 0 0 / 40%) 0%,
+        rgb(0 0 0 / 20%) 50%,
+        rgb(0 0 0 / 60%) 100%
+      );
       z-index: 2;
       pointer-events: none;
     }
@@ -164,3 +166,14 @@
 
 // Old pseudo-element method removed because mix-blend-mode fails on mobile
 // when the target element is on its own compositing layer (which it is).
+
+// Main content flex behavior on mobile
+// stylelint-disable-next-line media-feature-range-notation
+@media (max-width: 30rem) {
+  main.container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+}
