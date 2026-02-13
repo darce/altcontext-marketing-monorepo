@@ -47,11 +47,14 @@ Prefer Make targets over raw npm scripts for workflows that involve multiple ste
 - Validate all inputs server-side (Zod schemas at route boundaries).
 - Apply rate limiting on write endpoints.
 - Return explicit non-2xx failures and avoid leaking internals.
+- Register `@fastify/cors` with an explicit origin allowlist for the frontend host(s). Without CORS headers, browser `fetch` and `POST` from frontend JS will be blocked.
+- Destructive or admin-only endpoints (delete, metrics, purge) must require authentication or be restricted to the Fly private network. Rate limiting alone is not sufficient access control.
 
 ## Integration Behavior
 
 - Frontend telemetry and submit events must be non-blocking.
 - Do not introduce blocking scripts in `<head>` for analytics.
+- Endpoints that accept HTML form POSTs (no-JS fallback) must detect `Content-Type: application/x-www-form-urlencoded` and return a `3xx` redirect — not a JSON body. Verify that nested objects (e.g. UTM params) survive form-encoded payloads or flatten them.
 
 ## Deployment (Fly.io)
 
@@ -69,9 +72,15 @@ make -C backend fly-pg-attach     # wire DATABASE_URL from Fly Postgres
 
 ## Privacy and Compliance
 
-Canadian jurisdiction (PIPEDA + CASL) — see §9 of the roadmap.
+Ontario jurisdiction (PIPEDA + CASL) — see §9 of the roadmap.
 
-- Collect only necessary PII; hash IPs with `HMAC_SHA256(ip, pepper)`.
+- For Ontario private-sector commercial activities, apply PIPEDA as the baseline privacy regime.
+- Health information custodians in Ontario are governed by PHIPA for personal health information; treat health data as out-of-scope for marketing telemetry unless legal review approves.
+- Collect only necessary personal information; hash IPs with `HMAC_SHA256(ip, pepper)` and avoid storing raw IPs outside short-lived abuse controls.
+- Do not use non-user-controllable cross-site tracking methods (for example, opaque device fingerprinting for behavioural advertising/profiling).
+- Require meaningful consent for marketing analytics/profiling beyond reasonable expectations, and keep consent records with property identifier, policy version, timestamp, and source.
 - Track consent status per lead: `pending | express | implied | withdrawn`.
 - Provide unsubscribe and delete-by-email endpoints.
+- When deleting a lead, cascade or scrub all associated PII — including JSONB `payload` fields on related rows that use `onDelete: SetNull`. Orphaned PII violates PIPEDA erasure obligations.
+- CASL controls apply to CEM workflows: prior consent, sender identification, and unsubscribe processing within 10 business days.
 - Structured logging must redact sensitive fields before they reach Fly logs.

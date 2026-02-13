@@ -37,7 +37,7 @@ These constraints are aligned with:
 
 - `agentic/instructions.md`
 - `agentic/instructions/01-context-and-architecture.md`
-- `agentic/instructions/05-backend-service-rules.md`
+- `agentic/instructions/backend/service-rules.md`
 
 ## 3. Stack
 
@@ -282,6 +282,7 @@ The service operates under Canadian law. Two federal statutes govern data handli
 - Initialize backend TypeScript service.
 - Add Prisma schema and first migration.
 - Add health endpoint, logging, and env validation.
+- Status: Complete (tracked in `agentic/tasks/backend-tasks/0.1.backend-phase-0-1-foundation-and-capture.md`).
 
 ### Phase 1: Capture + Identity (2-4 days)
 
@@ -289,12 +290,14 @@ The service operates under Canadian law. Two federal statutes govern data handli
 - Add `anon_id` issuance in frontend and form integration.
 - Add visitor/email association logic and confidence scoring.
 - Add basic anti-spam/rate limits.
+- Status: Complete for backend capture/identity scope (tracked in `agentic/tasks/backend-tasks/0.1.backend-phase-0-1-foundation-and-capture.md` and follow-up review).
 
 ### Phase 2: Dashboard API + Rollups (2-3 days)
 
 - Add daily rollup jobs/materialized views.
 - Add `/v1/metrics/summary` for internal use.
 - Add operational telemetry and error monitoring.
+- Status: Planned next slice (tracked in `agentic/tasks/backend-tasks/0.2.backend-phase-2-dashboard-rollups-and-metrics.md`).
 
 ### Phase 3: Optimization (ongoing)
 
@@ -305,14 +308,14 @@ The service operates under Canadian law. Two federal statutes govern data handli
 ## 12. Acceptance Checklist
 
 - [ ] Backend service in `backend/` deployed to Fly and reachable.
-- [ ] `POST /v1/events` ingests telemetry with server-side IP/UA hashing.
-- [ ] `POST /v1/leads/capture` captures emails with consent, links to visitor identity.
-- [ ] `POST /v1/leads/unsubscribe` withdraws consent and is processed immediately.
-- [ ] Frontend form works both with JS and no-JS fallback.
+- [x] `POST /v1/events` ingests telemetry with server-side IP/UA hashing.
+- [x] `POST /v1/leads/capture` captures emails with consent, links to visitor identity.
+- [x] `POST /v1/leads/unsubscribe` withdraws consent and is processed immediately.
+- [ ] Frontend form works both with JS and no-JS fallback (backend no-JS capture support implemented; full frontend verification pending).
 - [ ] Dashboard summary endpoint returns MVP metrics.
-- [ ] Rate limiting and spam controls enabled on write endpoints.
-- [ ] PIPEDA retention/deletion workflows defined and tested.
-- [ ] CASL consent audit log (`consent_events`) operational.
+- [x] Rate limiting and spam controls enabled on write endpoints.
+- [ ] PIPEDA retention/deletion workflows defined and tested (implemented; expand end-to-end verification coverage).
+- [x] CASL consent audit log (`consent_events`) operational.
 - [ ] Backup + restore test completed.
 - [ ] p95 API latency and ingest error budgets documented.
 
