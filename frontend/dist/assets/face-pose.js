@@ -2,6 +2,7 @@
   // src/assets/face-pose/config.ts
   var SELECTORS = {
     container: "face-container",
+    scrubSurface: "main.container",
     image: "face-image",
     loader: "face-loader",
     metadataPanel: "face-metadata",
@@ -56,25 +57,29 @@
 
   // src/assets/face-pose/dom.ts
   var createDomFacade = () => {
-    const container = document.getElementById(SELECTORS.container);
+    const faceContainer = document.getElementById(SELECTORS.container);
+    const scrubSurface = document.querySelector(
+      SELECTORS.scrubSurface
+    );
+    const interactionSurface = scrubSurface instanceof HTMLElement ? scrubSurface : faceContainer instanceof HTMLElement ? faceContainer : null;
     const image = document.getElementById(SELECTORS.image);
     const loader = document.getElementById(SELECTORS.loader);
     const metadataPanel = document.getElementById(SELECTORS.metadataPanel);
     const metadataTitle = document.getElementById(SELECTORS.metadataTitle);
     let edgeFade = null;
-    if (container instanceof HTMLElement) {
-      const existingEdgeFade = container.querySelector(".face-edge-fade");
+    if (faceContainer instanceof HTMLElement) {
+      const existingEdgeFade = faceContainer.querySelector(".face-edge-fade");
       if (existingEdgeFade) {
         edgeFade = existingEdgeFade;
       } else {
         const createdEdgeFade = document.createElement("div");
         createdEdgeFade.className = "face-edge-fade";
         createdEdgeFade.setAttribute("aria-hidden", "true");
-        container.appendChild(createdEdgeFade);
+        faceContainer.appendChild(createdEdgeFade);
         edgeFade = createdEdgeFade;
       }
     }
-    const hasRequiredNodes = container instanceof HTMLElement && image instanceof HTMLImageElement && loader instanceof HTMLElement;
+    const hasRequiredNodes = faceContainer instanceof HTMLElement && interactionSurface instanceof HTMLElement && image instanceof HTMLImageElement && loader instanceof HTMLElement;
     const setLoaderText = (text) => {
       if (!(loader instanceof HTMLElement)) {
         return;
@@ -119,10 +124,10 @@
       edgeFade.style.opacity = safe.toFixed(3);
     };
     const getContainerRect = () => {
-      if (!(container instanceof HTMLElement)) {
+      if (!(interactionSurface instanceof HTMLElement)) {
         return null;
       }
-      return container.getBoundingClientRect();
+      return interactionSurface.getBoundingClientRect();
     };
     const renderMetadata = (item) => {
       if (!(metadataPanel instanceof HTMLElement)) {
@@ -139,7 +144,7 @@ roll: ${item.pose.roll}`;
     };
     return {
       hasRequiredNodes,
-      container: container instanceof HTMLElement ? container : null,
+      container: interactionSurface,
       image: image instanceof HTMLImageElement ? image : null,
       setLoaderText,
       hideLoader,
