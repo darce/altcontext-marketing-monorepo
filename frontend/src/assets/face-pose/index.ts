@@ -461,7 +461,7 @@ const initializeFacePose = async (): Promise<void> => {
       if (
         state.lastInteractionType === "pointer" &&
         now - state.lastInteractionAtMs <
-          GYRO_CONFIG.interactionCoordinationThresholdMs
+        GYRO_CONFIG.interactionCoordinationThresholdMs
       ) {
         return;
       }
@@ -525,36 +525,38 @@ const initializeFacePose = async (): Promise<void> => {
             return;
           }
         }
-
         window.addEventListener("deviceorientation", onOrientation);
-
-        // Timeout to hide overlay if no events actually arrive (e.g. desktop)
-        gyroDetectionTimeout = window.setTimeout(() => {
-          if (gyroEventCount < 2) {
-            permissionOverlay.style.display = "none";
-          }
-        }, GYRO_CONFIG.noEventTimeoutMs);
       } catch (e) {
         console.warn("DeviceOrientation permission failed", e);
-        permissionOverlay.style.display = "none";
       }
+      // Regardless of outcome, hide overlay if user tapped (explicit intent)
+      permissionOverlay.style.display = "none";
     };
 
-    if (requiresPermission) {
-      // Show overlay to request permission on tap
-      permissionOverlay.style.display = "flex";
-      permissionOverlay.addEventListener(
-        "click",
-        (e) => {
-          // Stop propagation so container pointerdown doesn't capture immediately
-          e.stopPropagation();
-          void enableMotion();
-        },
-        { once: true },
-      );
-    } else {
-      // Just try to enable automatically
-      void enableMotion();
+    // Auto-detect if permission is already granted (persisted)
+    // We listen immediately. If events arrive, we know we have permission.
+    try {
+      window.addEventListener("deviceorientation", onOrientation);
+
+      gyroDetectionTimeout = window.setTimeout(() => {
+        // If we haven't received events by now, AND permission is required,
+        // we likely need to ask for it.
+        // However, if we DID receive events (gyroEventCount > 0),
+        // then the overlay is already hidden by onOrientation logic.
+        if (gyroEventCount === 0 && requiresPermission) {
+          permissionOverlay.style.display = "flex";
+          permissionOverlay.addEventListener(
+            "click",
+            (e) => {
+              e.stopPropagation();
+              void enableMotion();
+            },
+            { once: true },
+          );
+        }
+      }, 500); // 500ms grace period to detect persistent permission
+    } catch {
+      // Ignore setup errors
     }
   }
 

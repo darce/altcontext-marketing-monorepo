@@ -1177,28 +1177,27 @@ roll: ${item.pose.roll}`;
             }
           }
           window.addEventListener("deviceorientation", onOrientation);
-          gyroDetectionTimeout = window.setTimeout(() => {
-            if (gyroEventCount < 2) {
-              permissionOverlay.style.display = "none";
-            }
-          }, GYRO_CONFIG.noEventTimeoutMs);
         } catch (e) {
           console.warn("DeviceOrientation permission failed", e);
-          permissionOverlay.style.display = "none";
         }
+        permissionOverlay.style.display = "none";
       };
-      if (requiresPermission) {
-        permissionOverlay.style.display = "flex";
-        permissionOverlay.addEventListener(
-          "click",
-          (e) => {
-            e.stopPropagation();
-            void enableMotion();
-          },
-          { once: true }
-        );
-      } else {
-        void enableMotion();
+      try {
+        window.addEventListener("deviceorientation", onOrientation);
+        gyroDetectionTimeout = window.setTimeout(() => {
+          if (gyroEventCount === 0 && requiresPermission) {
+            permissionOverlay.style.display = "flex";
+            permissionOverlay.addEventListener(
+              "click",
+              (e) => {
+                e.stopPropagation();
+                void enableMotion();
+              },
+              { once: true }
+            );
+          }
+        }, 500);
+      } catch {
       }
     }
     if (preloadPlan.backgroundStages.length > 0) {
