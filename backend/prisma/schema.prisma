@@ -1,5 +1,6 @@
 generator client {
-  provider = "prisma-client-js"
+  provider   = "prisma-client-js"
+  engineType = "library"
 }
 
 datasource db {
@@ -50,10 +51,10 @@ model Visitor {
   anonId      String   @unique @map("anon_id")
   firstSeenAt DateTime @default(now()) @map("first_seen_at")
   lastSeenAt  DateTime @default(now()) @map("last_seen_at")
-  firstIpHash String?  @db.VarChar(128) @map("first_ip_hash")
-  lastIpHash  String?  @db.VarChar(128) @map("last_ip_hash")
-  firstUaHash String?  @db.VarChar(128) @map("first_ua_hash")
-  lastUaHash  String?  @db.VarChar(128) @map("last_ua_hash")
+  firstIpHash String?  @map("first_ip_hash") @db.VarChar(128)
+  lastIpHash  String?  @map("last_ip_hash") @db.VarChar(128)
+  firstUaHash String?  @map("first_ua_hash") @db.VarChar(128)
+  lastUaHash  String?  @map("last_ua_hash") @db.VarChar(128)
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
@@ -72,13 +73,13 @@ model Session {
   startedAt   DateTime  @default(now()) @map("started_at")
   endedAt     DateTime? @map("ended_at")
   lastEventAt DateTime  @default(now()) @map("last_event_at")
-  landingPath String?   @db.Text @map("landing_path")
+  landingPath String?   @map("landing_path") @db.Text
   referrer    String?   @db.Text
-  utmSource   String?   @db.VarChar(255) @map("utm_source")
-  utmMedium   String?   @db.VarChar(255) @map("utm_medium")
-  utmCampaign String?   @db.VarChar(255) @map("utm_campaign")
-  utmTerm     String?   @db.VarChar(255) @map("utm_term")
-  utmContent  String?   @db.VarChar(255) @map("utm_content")
+  utmSource   String?   @map("utm_source") @db.VarChar(255)
+  utmMedium   String?   @map("utm_medium") @db.VarChar(255)
+  utmCampaign String?   @map("utm_campaign") @db.VarChar(255)
+  utmTerm     String?   @map("utm_term") @db.VarChar(255)
+  utmContent  String?   @map("utm_content") @db.VarChar(255)
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
@@ -92,24 +93,24 @@ model Session {
 }
 
 model Event {
-  id            String         @id @default(uuid())
-  visitorId     String         @map("visitor_id")
-  sessionId     String?        @map("session_id")
-  dedupeKey     String?        @unique @db.VarChar(64) @map("dedupe_key")
-  eventType     String         @db.VarChar(64) @map("event_type")
-  path          String?        @db.Text
-  timestamp     DateTime       @default(now())
-  ipHash        String?        @db.VarChar(128) @map("ip_hash")
-  uaHash        String?        @db.VarChar(128) @map("ua_hash")
+  id            String        @id @default(uuid())
+  visitorId     String        @map("visitor_id")
+  sessionId     String?       @map("session_id")
+  dedupeKey     String?       @unique @map("dedupe_key") @db.VarChar(64)
+  eventType     String        @map("event_type") @db.VarChar(64)
+  path          String?       @db.Text
+  timestamp     DateTime      @default(now())
+  ipHash        String?       @map("ip_hash") @db.VarChar(128)
+  uaHash        String?       @map("ua_hash") @db.VarChar(128)
   props         Json?
-  propertyId    String         @default("default") @db.VarChar(128) @map("property_id")
-  trafficSource TrafficSource  @default(unknown) @map("traffic_source")
-  deviceType    DeviceType     @default(unknown) @map("device_type")
-  countryCode   String?        @db.VarChar(2) @map("country_code")
-  isEntrance    Boolean        @default(false) @map("is_entrance")
-  isExit        Boolean        @default(false) @map("is_exit")
-  isConversion  Boolean        @default(false) @map("is_conversion")
-  createdAt     DateTime       @default(now()) @map("created_at")
+  propertyId    String        @default("default") @map("property_id") @db.VarChar(128)
+  trafficSource TrafficSource @default(unknown) @map("traffic_source")
+  deviceType    DeviceType    @default(unknown) @map("device_type")
+  countryCode   String?       @map("country_code") @db.VarChar(2)
+  isEntrance    Boolean       @default(false) @map("is_entrance")
+  isExit        Boolean       @default(false) @map("is_exit")
+  isConversion  Boolean       @default(false) @map("is_conversion")
+  createdAt     DateTime      @default(now()) @map("created_at")
 
   visitor Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
   session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
@@ -125,12 +126,12 @@ model Event {
 
 model Lead {
   id              String        @id @default(uuid())
-  emailNormalized String        @unique @db.VarChar(320) @map("email_normalized")
-  emailDomain     String?       @db.VarChar(255) @map("email_domain")
+  emailNormalized String        @unique @map("email_normalized") @db.VarChar(320)
+  emailDomain     String?       @map("email_domain") @db.VarChar(255)
   consentStatus   ConsentStatus @default(pending) @map("consent_status")
   firstCapturedAt DateTime      @default(now()) @map("first_captured_at")
   lastCapturedAt  DateTime      @default(now()) @map("last_captured_at")
-  sourceChannel   String?       @db.VarChar(255) @map("source_channel")
+  sourceChannel   String?       @map("source_channel") @db.VarChar(255)
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
@@ -165,7 +166,7 @@ model FormSubmission {
   leadId           String?          @map("lead_id")
   visitorId        String?          @map("visitor_id")
   sessionId        String?          @map("session_id")
-  formName         String           @db.VarChar(255) @map("form_name")
+  formName         String           @map("form_name") @db.VarChar(255)
   payload          Json?
   submittedAt      DateTime         @default(now()) @map("submitted_at")
   validationStatus ValidationStatus @default(accepted) @map("validation_status")
@@ -186,7 +187,7 @@ model ConsentEvent {
   leadId    String        @map("lead_id")
   status    ConsentStatus
   source    String        @db.VarChar(128)
-  ipHash    String?       @db.VarChar(128) @map("ip_hash")
+  ipHash    String?       @map("ip_hash") @db.VarChar(128)
   timestamp DateTime      @default(now())
   createdAt DateTime      @default(now()) @map("created_at")
 
@@ -198,7 +199,7 @@ model ConsentEvent {
 
 model IngestRejection {
   id         String   @id @default(uuid())
-  propertyId String   @db.VarChar(128) @map("property_id")
+  propertyId String   @map("property_id") @db.VarChar(128)
   endpoint   String   @db.VarChar(64)
   reason     String   @db.VarChar(64)
   statusCode Int      @map("status_code")
@@ -212,7 +213,7 @@ model IngestRejection {
 
 model DailyMetricRollup {
   id                      String   @id @default(uuid())
-  propertyId              String   @db.VarChar(128) @map("property_id")
+  propertyId              String   @map("property_id") @db.VarChar(128)
   day                     DateTime @db.Date
   uniqueVisitors          Int      @default(0) @map("unique_visitors")
   returningVisitors       Int      @default(0) @map("returning_visitors")
@@ -238,7 +239,7 @@ model DailyMetricRollup {
 
 model DailyIngestRollup {
   id             String   @id @default(uuid())
-  propertyId     String   @db.VarChar(128) @map("property_id")
+  propertyId     String   @map("property_id") @db.VarChar(128)
   day            DateTime @db.Date
   eventsAccepted Int      @default(0) @map("events_accepted")
   eventsRejected Int      @default(0) @map("events_rejected")

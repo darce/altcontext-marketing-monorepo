@@ -1,0 +1,30 @@
+# See https://fly.io/docs/reference/configuration/ for information about this file.
+
+app = 'marketing-altcontext'
+primary_region = 'yyz'
+
+[build]
+
+[deploy]
+release_command = 'node --max-old-space-size=384 ./node_modules/prisma/build/index.js migrate deploy'
+release_command_timeout = '120s'
+
+[http_service]
+internal_port = 3000
+force_https = true
+auto_stop_machines = 'stop'
+auto_start_machines = true
+min_machines_running = 0
+processes = ['app']
+
+[[http_service.checks]]
+grace_period = "15s"
+interval = "30s"
+method = "GET"
+path = "/v1/healthz"
+timeout = "5s"
+
+[[vm]]
+memory = '256mb'
+cpu_kind = 'shared'
+cpus = 1

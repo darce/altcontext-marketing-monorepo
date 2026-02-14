@@ -1,0 +1,12 @@
+node_modules
+dist
+.env
+.env.*
+!.env.example
+*.md
+.git
+.gitignore
+test
+.prettierignore
+eslint.config.js
+Makefile

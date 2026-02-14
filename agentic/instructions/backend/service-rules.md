@@ -73,6 +73,31 @@ make -C backend fly-ssh           # shell into machine
 make -C backend fly-pg-attach     # wire DATABASE_URL from Fly Postgres
 ```
 
+### Resource Constraints
+
+**512MB VM minimum** is required for Node.js 22 + Prisma 7 on Fly with the library engine (`engineType = "library"` in `schema.prisma`).
+
+**Memory breakdown:**
+- V8 + Node.js runtime: ~40–60MB
+- Prisma library engine (in-process query engine): ~40–80MB
+- App code + Fastify + dependencies: ~10–20MB
+- Linux kernel + init + fly-proxy: ~30–50MB on the VM
+- **Total baseline:** ~135–200MB RSS
+
+**Required configuration:**
+- `fly.toml`: `memory = '512mb'` in `[[vm]]` block
+- Dockerfile CMD: `node --max-old-space-size=384 dist/server.js` (caps V8 heap at 384MB)
+- `fly.toml` release_command: `node --max-old-space-size=384 ./node_modules/prisma/build/index.js migrate deploy`
+- `release_command_timeout = '120s'` to handle cold-start migration on shared CPU
+- Prisma schema: `engineType = "library"` (avoids binary query engine overhead)
+
+**Why 256MB fails:**
+- On cold start, V8 + Prisma library engine + first GC cycle push RSS to ~150–180MB
+- Linux kernel + init + fly-proxy consume ~30–50MB, leaving only ~200MB for the Node process
+- First HTTP requests or migration runs trigger additional allocations → OOM kill
+
+256MB might work with raw `pg` driver queries (no Prisma), but that's not worth the DX tradeoff for an MVP.
+
 ## Privacy and Compliance
 
 Ontario jurisdiction (PIPEDA + CASL) — see §9 of the roadmap.
