@@ -7,14 +7,15 @@
   <title>Alt Context - Interactive Face Pose</title>
   <style>
     @media (min-width: 30rem) {
-      #face-container {
+      .face-pose-viewer {
         position: relative;
         width: min(100%, 21rem);
         aspect-ratio: 1 / 1;
         margin: 0 auto;
         overflow: hidden;
         border-radius: 50%;
-        clip-path: circle(50%);
+        -webkit-mask-image: -webkit-radial-gradient(white, black);
+        mask-image: radial-gradient(white, black);
         touch-action: none;
       }
     }

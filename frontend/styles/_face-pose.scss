@@ -62,38 +62,10 @@
   box-shadow: $shadow-inset-outline, $shadow-viewer-depth;
 
   // Fix for mobile Safari: simple overflow:hidden fails if children have
-  // their own compositing layers (which they do via filter/transform).
-  // clip-path creates a hard clip that survives layer promotion.
-  clip-path: circle(50%);
-
-  // stylelint-disable-next-line media-feature-range-notation
-  @media (max-width: 30rem) {
-    position: fixed !important;
-    inset: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    aspect-ratio: auto !important;
-    border-radius: 0 !important;
-    clip-path: none !important;
-    z-index: 0 !important;
-    pointer-events: none;
-    border: none;
-    box-shadow: none;
-    margin: 0 !important;
-
-    &::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to bottom,
-          rgb(0 0 0 / 40%) 0%,
-          rgb(0 0 0 / 20%) 50%,
-          rgb(0 0 0 / 60%) 100%);
-      z-index: 2;
-      pointer-events: none;
-    }
-  }
+  // their own compositing layers.
+  // mask-image forces clipping to the border-radius even with composited children.
+  -webkit-mask-image: -webkit-radial-gradient(white, black);
+  mask-image: radial-gradient(white, black);
 }
 
 .face-pose-viewer::after {
