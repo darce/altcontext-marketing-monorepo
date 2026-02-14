@@ -49,7 +49,7 @@
 
   <main class="container">
     <div class="face-pose-shell">
-      <div id="face-container" role="img" aria-label="Interactive face pose viewer" class="face-pose-viewer duotone">
+      <div id="face-container" role="img" aria-label="Interactive face pose viewer" class="face-pose-viewer">
         <img id="face-image" src="" alt="Interactive Face" style="display: none" />
         <div id="face-loader">Loading metadata...</div>
         <!-- Gyroscope Permission Overlay -->
@@ -77,9 +77,6 @@
               ">
               Tap to Enable Motion
             </p>
-            <p style="margin: 0; font-size: 0.9em; opacity: 0.9">
-              Experience 3D Face Tracking
-            </p>
           </div>
         </div>
       </div>
@@ -91,38 +88,7 @@
 Loading metadata...</pre>
       </div>
     </div>
-
-    <!-- SVG Filters -->
-    <svg aria-hidden="true" style="position: absolute; width: 0; height: 0; overflow: hidden" version="1.1"
-      xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <filter id="duotone-filter">
-          <!-- 1. Grayscale -->
-          <feColorMatrix type="matrix" values=".33 .33 .33 0 0
-                      .33 .33 .33 0 0
-                      .33 .33 .33 0 0
-                      0 0 0 1 0" result="gray" />
-          <!-- 2. Contrast (1.8) -->
-          <!-- slope=1.8, intercept = 0.5 - (0.5 * 1.8) = -0.4 -->
-          <feComponentTransfer in="gray" result="contrast">
-            <feFuncR type="linear" slope="1.8" intercept="-0.4" />
-            <feFuncG type="linear" slope="1.8" intercept="-0.4" />
-            <feFuncB type="linear" slope="1.8" intercept="-0.4" />
-          </feComponentTransfer>
-          <!-- 3. Duotone Map -->
-          <!-- Shadow: #118300 (17, 131, 0) -> R:0.066, G:0.513, B:0 -->
-          <!-- Highlight: #e063c1 (224, 99, 193) -> R:0.878, G:0.388, B:0.756 -->
-          <feComponentTransfer in="contrast" result="duotone">
-            <feFuncR type="table" tableValues="0.06666 0.87843" />
-            <feFuncG type="table" tableValues="0.51372 0.38823" />
-            <feFuncB type="table" tableValues="0 0.75686" />
-          </feComponentTransfer>
-        </filter>
-      </defs>
-    </svg>
   </main>
-
-
 
   <footer class="container">
     <section class="email-capture-section" aria-label="Email signup">
