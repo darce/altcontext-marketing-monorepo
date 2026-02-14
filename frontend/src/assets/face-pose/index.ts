@@ -533,30 +533,47 @@ const initializeFacePose = async (): Promise<void> => {
       permissionOverlay.style.display = "none";
     };
 
-    // Auto-detect if permission is already granted (persisted)
-    // We listen immediately. If events arrive, we know we have permission.
-    try {
-      window.addEventListener("deviceorientation", onOrientation);
+    // Auto-detect if permission is already granted (persisted).
+    // On iOS 13+, requestPermission() is required. Calling it without a
+    // user gesture succeeds when the browser still remembers an earlier
+    // grant; otherwise it throws NotAllowedError and we fall back to the
+    // overlay so the user can tap.
+    if (requiresPermission) {
+      let alreadyGranted = false;
+      try {
+        const response = await DeviceOrientation.requestPermission();
+        alreadyGranted = response === "granted";
+      } catch {
+        // Requires user gesture — not yet granted
+      }
 
-      gyroDetectionTimeout = window.setTimeout(() => {
-        // If we haven't received events by now, AND permission is required,
-        // we likely need to ask for it.
-        // However, if we DID receive events (gyroEventCount > 0),
-        // then the overlay is already hidden by onOrientation logic.
-        if (gyroEventCount === 0 && requiresPermission) {
-          permissionOverlay.style.display = "flex";
-          permissionOverlay.addEventListener(
-            "click",
-            (e) => {
-              e.stopPropagation();
-              void enableMotion();
-            },
-            { once: true },
-          );
-        }
-      }, 500); // 500ms grace period to detect persistent permission
-    } catch {
-      // Ignore setup errors
+      if (alreadyGranted) {
+        window.addEventListener("deviceorientation", onOrientation);
+      } else {
+        permissionOverlay.style.display = "flex";
+        permissionOverlay.addEventListener(
+          "click",
+          (e) => {
+            e.stopPropagation();
+            void enableMotion();
+          },
+          { once: true },
+        );
+      }
+    } else {
+      // Non-iOS: events flow without a permission gate.
+      // Listen immediately and use the timeout to detect hardware presence.
+      try {
+        window.addEventListener("deviceorientation", onOrientation);
+
+        gyroDetectionTimeout = window.setTimeout(() => {
+          if (gyroEventCount === 0) {
+            // No gyro hardware detected — leave overlay hidden.
+          }
+        }, 500);
+      } catch {
+        // Ignore setup errors
+      }
     }
   }
 
