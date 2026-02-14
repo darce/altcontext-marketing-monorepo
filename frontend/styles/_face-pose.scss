@@ -68,30 +68,28 @@
 
   // stylelint-disable-next-line media-feature-range-notation
   @media (max-width: 30rem) {
-    position: fixed;
-    inset: 0;
+    position: fixed !important;
+    inset: 0 !important;
     width: 100vw !important;
     height: 100vh !important;
     height: 100dvh !important;
-    aspect-ratio: auto;
-    border-radius: 0;
-    clip-path: none;
-    z-index: 0;
+    aspect-ratio: auto !important;
+    border-radius: 0 !important;
+    clip-path: none !important;
+    z-index: 0 !important;
     pointer-events: none;
     border: none;
     box-shadow: none;
-    margin: 0;
+    margin: 0 !important;
 
     &::before {
       content: "";
       position: absolute;
       inset: 0;
-      background: linear-gradient(
-        to bottom,
-        rgb(0 0 0 / 40%) 0%,
-        rgb(0 0 0 / 20%) 50%,
-        rgb(0 0 0 / 60%) 100%
-      );
+      background: linear-gradient(to bottom,
+          rgb(0 0 0 / 40%) 0%,
+          rgb(0 0 0 / 20%) 50%,
+          rgb(0 0 0 / 60%) 100%);
       z-index: 2;
       pointer-events: none;
     }
@@ -115,6 +113,7 @@
   max-width: none !important;
   max-height: none !important;
   transform-origin: 0 0;
+  object-fit: cover;
 
   // REMOVED will-change: transform
   // It promoted this element to a GPU layer, breaking the parent's overflow: hidden
