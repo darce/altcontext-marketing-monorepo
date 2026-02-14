@@ -1182,22 +1182,35 @@ roll: ${item.pose.roll}`;
         }
         permissionOverlay.style.display = "none";
       };
-      try {
-        window.addEventListener("deviceorientation", onOrientation);
-        gyroDetectionTimeout = window.setTimeout(() => {
-          if (gyroEventCount === 0 && requiresPermission) {
-            permissionOverlay.style.display = "flex";
-            permissionOverlay.addEventListener(
-              "click",
-              (e) => {
-                e.stopPropagation();
-                void enableMotion();
-              },
-              { once: true }
-            );
-          }
-        }, 500);
-      } catch {
+      if (requiresPermission) {
+        let alreadyGranted = false;
+        try {
+          const response = await DeviceOrientation.requestPermission();
+          alreadyGranted = response === "granted";
+        } catch {
+        }
+        if (alreadyGranted) {
+          window.addEventListener("deviceorientation", onOrientation);
+        } else {
+          permissionOverlay.style.display = "flex";
+          permissionOverlay.addEventListener(
+            "click",
+            (e) => {
+              e.stopPropagation();
+              void enableMotion();
+            },
+            { once: true }
+          );
+        }
+      } else {
+        try {
+          window.addEventListener("deviceorientation", onOrientation);
+          gyroDetectionTimeout = window.setTimeout(() => {
+            if (gyroEventCount === 0) {
+            }
+          }, 500);
+        } catch {
+        }
       }
     }
     if (preloadPlan.backgroundStages.length > 0) {
