@@ -134,6 +134,20 @@ export const createApp = async (): Promise<FastifyInstance> => {
       });
     }
 
+    // Let Fastify/plugin-set status codes (e.g. 429 from @fastify/rate-limit) pass through.
+    if (
+      error instanceof Error &&
+      "statusCode" in error &&
+      typeof (error as Record<string, unknown>).statusCode === "number"
+    ) {
+      const statusCode = (error as Record<string, unknown>).statusCode as number;
+      if (statusCode >= 400 && statusCode < 500) {
+        return reply
+          .status(statusCode)
+          .send({ ok: false, error: error.message });
+      }
+    }
+
     request.log.error({ err: error }, "unhandled request error");
     return reply.status(500).send({
       ok: false,
