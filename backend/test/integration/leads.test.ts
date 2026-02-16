@@ -100,3 +100,23 @@ test("POST /v1/leads/capture handles honeypot", async () => {
   const count = await prisma.lead.count();
   assert.equal(count, 0);
 });
+
+test("POST /v1/leads/capture rejects invalid email", async () => {
+  const payload = {
+    email: "not-an-email",
+    anonId: "anon-invalid-email",
+    formName: "signup",
+  };
+
+  const res = await app.inject({
+    method: "POST",
+    url: "/v1/leads/capture",
+    payload,
+  });
+
+  assert.equal(res.statusCode, 400);
+  const body = res.json();
+  assert.equal(body.ok, false);
+  assert.equal(body.error, "invalid_request");
+  assert.ok(body.issues.some((i: any) => i.path === "email"));
+});

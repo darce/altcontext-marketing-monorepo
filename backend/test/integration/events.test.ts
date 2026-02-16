@@ -99,3 +99,32 @@ test("POST /v1/events silent success for honeypot", async () => {
   });
   assert.equal(count, 0);
 });
+
+test("POST /v1/events rate limit exceeded", async () => {
+  const payload = {
+    anonId: "anon-rate-limit-test",
+    eventType: "page_view",
+    path: "/",
+  };
+
+  // Route has max: 180 in events.ts. Inject 200 requests quickly.
+  // We use a for loop with inject to simulate rapid requests.
+  for (let i = 0; i < 200; i++) {
+    await app.inject({
+      method: "POST",
+      url: "/v1/events",
+      payload,
+    });
+  }
+
+  // 121st request should be rate limited
+  const res = await app.inject({
+    method: "POST",
+    url: "/v1/events",
+    payload,
+  });
+
+  assert.equal(res.statusCode, 429);
+  const body = res.json();
+  assert.equal(body.ok, false);
+});
