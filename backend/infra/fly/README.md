@@ -11,9 +11,9 @@ Infrastructure configuration for deploying the marketing backend to [Fly.io](htt
 
 ## Files
 
-| File                   | Purpose                                                             |
-| ---------------------- | ------------------------------------------------------------------- |
-| `fly.toml` (monorepo root) | Fly app configuration — VM size, regions, health checks, build path |
+| File                           | Purpose                                                             |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `fly.toml` (monorepo root)     | Fly app configuration — VM size, regions, health checks, build path |
 | `backend/infra/fly/Dockerfile` | Multi-stage build: compile TS → production image (node:22-slim)     |
 
 > `fly.toml` lives at the **monorepo root** (Docker build context). Run `fly deploy` from the monorepo root. The Dockerfile stays in `backend/infra/fly/` and is referenced via `[build] dockerfile`.

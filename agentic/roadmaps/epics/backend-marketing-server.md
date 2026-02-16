@@ -451,22 +451,36 @@ Unit tests verify behaviour at build time; runtime assertions catch contract vio
 
 ### Current state
 
-A single `ADMIN_API_KEY` env var protects admin endpoints. No user authentication exists.
+A single `ADMIN_API_KEY` env var protects admin endpoints (`/v1/leads/delete`, `/v1/metrics/summary`). No user authentication exists. `/v1/leads/unsubscribe` is currently unprotected (rate-limited only) — adding `assertAdminRequest` is a pre-MT blocker (see [0.5.1 findings](../../tasks/backend-tasks/0.5.1.post-review-findings.md#b1)).
 
-### Target state
+### Target state — three-surface auth model
 
-Basic authentication is required before the full multi-tenancy rollout (Phase 6 / [multi-tenancy-rls.md](multi-tenancy-rls.md)).
+The full auth design is in [multi-tenancy-rls.md §7](multi-tenancy-rls.md#7-auth-design-decisions). Summary:
 
-- **API key auth (ingest)**: `x-api-key` header resolved against `api_keys` table (per multi-tenancy roadmap §6).
-- **Session auth (dashboard)**: Email + password login with bcrypt hashing. Encrypted HTTP-only cookie. Session stored server-side (Postgres or in-memory store with TTL).
-- **Magic link (future)**: Passwordless login via email magic link. Deferred until email sending infrastructure exists.
-- **RBAC**: `owner` / `admin` / `member` roles per tenant (detailed in multi-tenancy roadmap §7).
+| Surface | Pattern | Resolves |
+|---------|---------|----------|
+| **Ingest** (events, leads, unsubscribe) | Scoped API keys (`x-api-key` → `api_keys` table) | Tenant + optional property |
+| **Dashboard** (admin UI) | Server-side sessions (bcrypt login → encrypted HTTP-only cookie → PostgreSQL session store) | Tenant + user + RBAC |
+| **Admin API** (metrics, delete, purge) | Admin-scoped API keys (`scope = 'admin'`) | Tenant |
+
+### Why not JWT / OAuth / OIDC?
+
+- **JWT**: Stateless tokens complicate revocation. Single Fly machine = no cross-service validation needed. Adds complexity without benefit at this scale.
+- **OAuth 2.0 / OIDC**: Requires an identity provider or self-hosted infra. Premature for a founding-team user base. Can be added later as a login provider without changing the tenant resolution model.
+- **Passkeys / WebAuthn**: Defer until the dashboard is mature.
+
+See [multi-tenancy-rls.md §7 Alternatives Considered](multi-tenancy-rls.md#alternatives-considered) for the full analysis.
+
+### Session storage decision
+
+PostgreSQL, not in-memory. Fly machines restart on deploy and can be stopped/started by auto-scaling — in-memory session stores would lose all sessions on restart. A `sessions` table (or reuse of the existing `pg` pool) provides durability with minimal overhead.
 
 ### Delivery
 
-- Phase Auth-1: Implement `POST /v1/auth/login` (email + bcrypt password) and `POST /v1/auth/logout`. Encrypted cookie session.
-- Phase Auth-2: Add session validation middleware for dashboard routes.
-- Phase Auth-3: Integrate with multi-tenancy tenant resolution.
+- **Pre-MT**: Add `assertAdminRequest` to `/v1/leads/unsubscribe`. No schema changes.
+- **Phase Auth-1**: Implement `POST /v1/auth/login` (email + bcrypt password) and `POST /v1/auth/logout`. Encrypted session cookie backed by PostgreSQL.
+- **Phase Auth-2**: Add session validation middleware for dashboard routes.
+- **Phase Auth-3**: Integrate with multi-tenancy tenant resolution (MT-3).
 
 ## 16. Multi-Tenancy: Multi-Property and Multi-Org Scoping
 

@@ -107,7 +107,6 @@ oci resource-manager job create-destroy-job \
 
 #### Anti-patterns (Do Not)
 
-- Do not create Always Free resources outside home region — they will incur charges.
 - Do not exceed Always Free quotas (2x E2.1.Micro or 4 OCPU A1.Flex total) — overages are paid.
 - Do not hard-code compartment/tenancy OCIDs in source — read from `~/.oci/config` or env vars.
 - Do not skip security lists or leave all ports open (0.0.0.0/0:*) — attackers scan public IPs.

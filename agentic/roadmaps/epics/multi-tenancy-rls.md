@@ -10,10 +10,11 @@ Last updated: 2026-02-16
 - [4. Tenant Model](#4-tenant-model)
 - [5. Row-Level Security Strategy](#5-row-level-security-strategy)
 - [6. API Changes](#6-api-changes)
-- [7. Dashboard Multi-Tenancy](#7-dashboard-multi-tenancy)
-- [8. Migration Strategy](#8-migration-strategy)
-- [9. Delivery Phases](#9-delivery-phases)
-- [10. Acceptance Checklist](#10-acceptance-checklist)
+- [7. Auth Design Decisions](#7-auth-design-decisions)
+- [8. Dashboard Multi-Tenancy](#8-dashboard-multi-tenancy)
+- [9. Migration Strategy](#9-migration-strategy)
+- [10. Delivery Phases](#10-delivery-phases)
+- [11. Acceptance Checklist](#11-acceptance-checklist)
 
 ## 1. Goals
 
@@ -186,22 +187,100 @@ const withTenant = async <T>(tenantId: string, fn: (tx: PoolClient) => Promise<T
 
 During migration, the existing `ADMIN_API_KEY` env var is mapped to the bootstrap tenant's admin API key. Static site ingest calls get a dedicated ingest key for the bootstrap tenant.
 
-## 7. Dashboard Multi-Tenancy
+## 7. Auth Design Decisions
 
-### Authentication
+Three auth surfaces, each with a distinct pattern chosen for the current scale (single Fly machine, small team) while preserving a clear migration path to multi-org.
 
-- SvelteKit server-side sessions (encrypted cookie).
-- Login via email + password (bcrypt) or magic link.
-- Session stores `userId` + `tenantId`.
-- `+layout.server.ts` resolves tenant context on every request.
+### Surface 1: Ingest Auth (public endpoints)
 
-### Authorization
+**Pattern: Scoped API keys resolved from `api_keys` table.**
+
+Endpoints: `POST /v1/events`, `POST /v1/leads/capture`, `POST /v1/leads/unsubscribe`.
+
+```text
+x-api-key: ak_live_<random>  →  SHA-256 lookup  →  api_keys.tenant_id + scope + property_id
+```
+
+- Each key has a `scope` (`ingest` | `admin`) and an optional `property_id` constraint.
+- Ingest keys are **safe to embed in client-side JavaScript** — they can only write, not read.
+- Tenant resolution: `api_keys.tenant_id` → `SET LOCAL app.current_tenant_id`.
+- Property scoping: if `property_id` is set, restrict writes to that property. If NULL, writes to any property within the tenant.
+- Revocable without deploy: set `revoked_at` in DB.
+- **Unsubscribe auth**: use the ingest-scoped API key. The email in the body + tenant from the key is sufficient — only the resolved tenant's lead can be unsubscribed. No HMAC token needed until email-embedded unsubscribe links exist.
+
+#### Property-scoped keys
+
+When the `properties` table is formalised (backend epic §16):
+
+```sql
+ALTER TABLE api_keys ADD COLUMN property_id UUID REFERENCES properties(id);
+-- NULL = all properties within tenant; non-NULL = restricted to one property
+```
+
+This enables:
+- Marketing site has its own ingest key (scoped to `property_id = 'marketing'`).
+- Docs site has a separate key (scoped to `property_id = 'docs'`).
+- Admin key has no property constraint (sees all properties within tenant).
+- Dashboard property picker filters by the key's scope or the user's role.
+
+### Surface 2: Dashboard Auth (admin UI)
+
+**Pattern: Server-side sessions with encrypted HTTP-only cookies.**
+
+```text
+POST /v1/auth/login   { email, password }  →  bcrypt verify  →  set encrypted cookie
+POST /v1/auth/logout                       →  destroy session
+```
+
+- Session stores `userId` + `tenantId` + `role`.
+- `+layout.server.ts` validates cookie on every SSR request, resolves tenant context.
+- **Session storage: PostgreSQL** (not in-memory) — Fly machines can restart at any time; in-memory sessions would be lost.
+- Future magic link: passwordless login via email. Deferred until email sending infrastructure exists.
+- Future multi-org: session adds `orgId`. `tenantId` remains the primary RLS key; `orgId` is a superset filter for org-admin views.
+
+### Surface 3: Admin API Auth (programmatic access)
+
+**Pattern: Admin-scoped API keys (same `api_keys` table, `scope = 'admin'`).**
+
+```text
+x-api-key: ak_admin_<random>  →  SHA-256 lookup  →  scope='admin', tenant_id
+```
+
+Endpoints: `GET /v1/metrics/summary`, `POST /v1/leads/delete`, purge scripts.
+
+- Replaces current `ADMIN_API_KEY` env var.
+- Admin keys can read metrics, delete leads, run purge — all scoped to their tenant.
+- The bootstrap tenant's admin key is seeded from the current `ADMIN_API_KEY` during the MT-1 migration.
+
+### Authorization (RBAC)
 
 | Role | Permissions |
 |------|-------------|
 | `owner` | Full access. Manage billing, team, API keys, properties. |
 | `admin` | Manage properties, API keys, view all dashboards. |
 | `member` | View dashboards for assigned properties only. |
+
+Roles are stored on `users.role` (per-tenant). RBAC is enforced in route middleware, not RLS — RLS handles tenant isolation; RBAC handles intra-tenant permissions.
+
+### Alternatives Considered
+
+| Alternative | Why not (now) |
+|-------------|---------------|
+| **JWT** | Stateless tokens complicate revocation and session invalidation. Single Fly machine — no cross-service token validation needed. JWTs add complexity without benefit at this scale. |
+| **OAuth 2.0 / OIDC** | Requires an identity provider (Auth0, Clerk, etc.) or self-hosted. Premature — the user base is the founding team. Can be added later as a login provider alongside email+password without changing the tenant resolution model. |
+| **Passkeys / WebAuthn** | Excellent UX but requires client-side JS and browser API support. Defer until the dashboard is mature. |
+
+### Migration Path
+
+| Phase | What changes |
+|-------|--------------|
+| **Pre-MT (now)** | Add `assertAdminRequest` to `/v1/leads/unsubscribe`. No schema changes. |
+| **MT-1** | Create `api_keys` table. Migrate `ADMIN_API_KEY` → bootstrap tenant admin key. Add `resolveTenant` hook. Ingest endpoints require `x-api-key`. |
+| **Auth-1** | Create `users` table. Implement `POST /v1/auth/login` + `/logout`. Encrypted cookie sessions in PostgreSQL. |
+| **MT-3** | Dashboard `+layout.server.ts` guard. Tenant context from session. RBAC enforcement. |
+| **Future** | Add `org_id` to sessions. Org-admin cross-tenant views. OAuth/OIDC as optional login provider. |
+
+## 8. Dashboard Multi-Tenancy
 
 ### Tenant-scoped pages
 
@@ -219,7 +298,7 @@ During migration, the existing `ADMIN_API_KEY` env var is mapped to the bootstra
 
 Users who belong to multiple tenants (future) can switch via a tenant picker in the top bar.
 
-## 8. Migration Strategy
+## 9. Migration Strategy
 
 ### Data migration
 
@@ -245,7 +324,7 @@ CREATE INDEX events_tenant_property_ts_idx ON events(tenant_id, property_id, tim
 
 The `leads.email_normalized` unique constraint becomes `UNIQUE(tenant_id, email_normalized)` so different tenants can capture the same email independently.
 
-## 9. Delivery Phases
+## 10. Delivery Phases
 
 ### Phase MT-1: Tenant model and API keys (2–3 days)
 
@@ -286,7 +365,7 @@ The `leads.email_normalized` unique constraint becomes `UNIQUE(tenant_id, email_
 - Generate initial ingest API key.
 - Property creation within tenant.
 
-## 10. Acceptance Checklist
+## 11. Acceptance Checklist
 
 - [ ] All existing data assigned to bootstrap tenant.
 - [ ] RLS enforced: queries without `SET LOCAL app.current_tenant_id` return zero rows.

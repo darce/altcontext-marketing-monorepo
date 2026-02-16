@@ -115,8 +115,8 @@ Recommended implementation order with estimated effort.
 | 1 | Phase 2B: Consolidate WTL → Event | Backend | 1–2 days | ✅ Done |
 | 1a | Phase 0.3: Remove Prisma runtime | Backend | — | ✅ Done |
 | 1b | Phase 0.3.1: Post-Prisma audit | Backend | — | ✅ Done |
-| 1c | Phase 0.4: Test coverage (core routes) | Backend | — | In progress (Phase 1 done) |
-| 2 | Phase 4: Deploy to Fly.io | Backend | 1–2 days | Infra provisioned; smoke tests pending |
+| 1c | Phase 0.4: Test coverage (core routes) | Backend | — | ✅ Done |
+| 2 | Phase 4: Deploy to Fly.io | Backend | 1–2 days | ✅ Done |
 | 3 | Phase 5: First property integration | Backend (static client) | 2–3 days | #2 |
 | 4 | Phase 6 / MT-1: Tenant model + API keys | Multi-Tenancy | 2–3 days | #2 |
 | 5 | Phase 6 / MT-2: Row-Level Security | Multi-Tenancy | 1–2 days | #4 |
@@ -147,9 +147,10 @@ These apply to both **platform** workspaces (backend + dashboard) and **client p
 
 ### Authentication
 
-- API key auth (ingest) + session auth (dashboard) → [epics/backend-marketing-server.md §15](epics/backend-marketing-server.md)
+- Three-surface auth model (ingest keys, dashboard sessions, admin keys) → [epics/multi-tenancy-rls.md §7](epics/multi-tenancy-rls.md) (canonical design decisions)
+- Backend auth delivery phases → [epics/backend-marketing-server.md §15](epics/backend-marketing-server.md)
 - Dashboard guards → [epics/dashboard.md §7](epics/dashboard.md)
-- Full multi-tenancy auth → [epics/multi-tenancy-rls.md §7](epics/multi-tenancy-rls.md)
+- Alternatives analysis (JWT, OAuth, Passkeys) → [epics/multi-tenancy-rls.md §7 Alternatives](epics/multi-tenancy-rls.md)
 
 ### Multi-Tenancy
 
@@ -192,8 +193,8 @@ Full proposal: [epics/e2e-testing-harness.md](epics/e2e-testing-harness.md)
 - [x] Remove Prisma runtime — `pg` driver only (Phase 0.3)
 - [x] Post-Prisma-removal audit (Phase 0.3.1)
 - [x] Core route test coverage — events, leads, health, delete (Phase 0.4 P1)
-- [ ] Test coverage — service-layer edge cases + utilities (Phase 0.4 P2/P3)
-- [ ] Deploy to Fly.io — smoke tests + operational baseline (Phase 4)
+- [x] Test coverage — service-layer edge cases + utilities (Phase 0.4 P2/P3)
+- [x] Deploy to Fly.io — smoke tests + operational baseline (Phase 4)
 - [ ] Geo enrichment (MaxMind GeoLite2)
 - [ ] i18n message catalogue + locale resolution
 - [ ] Runtime assertions (tenant context, rollups, ingest)
