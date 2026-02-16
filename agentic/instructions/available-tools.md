@@ -18,7 +18,7 @@ fly secrets import < .env           # bulk-import dotenv (use --stage to defer r
 fly status                          # machine health + region + version
 fly logs                            # tail live logs
 fly ssh console                     # shell into running machine
-fly postgres create                 # provision managed Postgres cluster
+fly postgres create                 # provision unmanaged Postgres cluster (you manage backups/upgrades)
 fly postgres attach <pg-app>        # set DATABASE_URL secret on the consumer app
 fly scale count 2                   # horizontal scale
 fly scale vm shared-cpu-1x          # change VM size
@@ -27,10 +27,10 @@ fly checks list                     # health check state
 
 #### Patterns (Do)
 
-- Run `fly launch` from `backend/` — keeps `fly.toml` co-located with the service.
+- Run `fly launch` from `backend/infra/fly/` — keeps `fly.toml` co-located with the Dockerfile. Use `--config infra/fly/fly.toml` when running other fly commands from `backend/`.
 - Use `fly secrets set` for all credentials; never commit `.env` with real values.
 - Use `fly secrets import < .env --stage` to batch secrets without triggering a restart.
-- Add a `[deploy] release_command` in `fly.toml` for Prisma migrations (`npx prisma migrate deploy`).
+- Run migrations externally via `fly proxy` + `npx prisma migrate deploy` from a dev machine — Prisma is a dev-only tool excluded from the production image (`npm ci --omit=dev`).
 - Set `internal_port` in `fly.toml` `[http_service]` to match the app's listen port (default 3000).
 - Bind the app to `0.0.0.0` (not `localhost`) so `fly-proxy` can reach it.
 - Keep Postgres in the same Fly private network — skip SSL/TLS for internal connections.
@@ -41,7 +41,7 @@ fly checks list                     # health check state
 - Do not run `fly launch` from the monorepo root — it would generate config for the wrong directory.
 - Do not hard-code `DATABASE_URL` in source; always read from `process.env`.
 - Do not use `fly deploy --local-only` in CI without a Docker daemon available.
-- Do not skip `release_command` for migrations — manual SSH migration is fragile.
+- Do not run `prisma migrate deploy` from inside the deployed container — Prisma is a dev-only dependency and is not present in the production image.
 - Do not allocate a dedicated IPv4 unless you need non-443 public ports (costs extra).
 - Do not store raw PII in Fly logs — ensure structured logging redacts sensitive fields.
 
@@ -121,7 +121,7 @@ oci resource-manager job create-destroy-job \
 |------|---------|
 | `docker` / `docker-compose` | Local containerised dev; Fly uses Dockerfile for deploy |
 | `gh` | GitHub CLI — PRs, releases, Actions |
-| `postgresql@17` | Local Postgres for dev/test parity with Fly Managed Postgres |
+| `postgresql@17` | Local Postgres for dev/test parity with Fly Postgres (unmanaged cluster) |
 | `redis` | Local queue / cache backing (phase 2+) |
 | `ripgrep` | Fast workspace search |
 | `imagemagick` | Image processing (offline scripts) |

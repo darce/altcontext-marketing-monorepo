@@ -1,0 +1,43 @@
+// styles/site.scss
+@use "tokens";
+@use "base";
+@use "typography";
+@use "face-pose";
+@use "email-capture";
+
+// Layout primitives
+// stylelint-disable-next-line media-feature-range-notation
+@media (max-width: 30rem) {
+  html,
+  body {
+    height: 100dvh;
+    overflow: hidden;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: tokens.$color-bg;
+  color: tokens.$color-text;
+  font-family: tokens.$font-body;
+  overflow-x: hidden;
+}
+
+.container {
+  position: relative;
+  z-index: 1;
+  max-width: tokens.$layout-max-width;
+  margin: 0 auto;
+  padding: tokens.$space-md;
+}
+
+// Defensive override in case of caching issues
+header.container {
+  height: auto !important;
+  display: block;
+}

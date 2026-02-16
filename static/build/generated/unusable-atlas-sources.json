@@ -1,0 +1,1022 @@
+{
+  "qualityGateRejectedCount": 168,
+  "postCropRejectedCount": 0,
+  "missingSourceCount": 0,
+  "missingDerivativeOutputCount": 0,
+  "deletionCandidateCount": 168,
+  "deletionCandidates": [
+    "celebs01/al_pacino_27.jpg",
+    "celebs01/amy_winehouse_18.jpg",
+    "celebs01/amy_winehouse_21.jpg",
+    "celebs01/amy_winehouse_22.jpg",
+    "celebs01/amy_winehouse_8.jpg",
+    "celebs01/amy_winehouse_9.jpg",
+    "celebs01/andy_warhol_2.jpg",
+    "celebs01/anne_hathaway_5.jpg",
+    "celebs01/ariana_grande_6.jpg",
+    "celebs01/arnold_schwarzenegger_12.jpg",
+    "celebs01/arnold_schwarzenegger_21.jpg",
+    "celebs01/arnold_schwarzenegger_26.png",
+    "celebs01/arnold_schwarzenegger_3.jpg",
+    "celebs01/arnold_schwarzenegger_7.jpg",
+    "celebs01/arnold_schwarzenegger_8.jpg",
+    "celebs01/audrey_hepburn_7.jpg",
+    "celebs01/bad_bunny_1.jpg",
+    "celebs01/bad_bunny_2.webp",
+    "celebs01/bad_bunny_20.png",
+    "celebs01/bad_bunny_32.jpg",
+    "celebs01/bad_bunny_41.jpg",
+    "celebs01/bad_bunny_8.jpg",
+    "celebs01/bette_davis_28.jpg",
+    "celebs01/bob_dylan_17.jpg",
+    "celebs01/bob_dylan_2.jpg",
+    "celebs01/bob_dylan_26.jpg",
+    "celebs01/bob_dylan_3.jpg",
+    "celebs01/bob_dylan_7.jpg",
+    "celebs01/bob_dylan_9.jpg",
+    "celebs01/bob_marley_3.jpg",
+    "celebs01/bob_marley_33.jpeg",
+    "celebs01/bob_ross_1.jpg",
+    "celebs01/bob_ross_11.jpg",
+    "celebs01/bob_ross_16.jpg",
+    "celebs01/bob_ross_17.jpeg",
+    "celebs01/bob_ross_3.jpg",
+    "celebs01/bob_ross_35.jpg",
+    "celebs01/bob_ross_5.jpg",
+    "celebs01/brigitte_bardot_18.jpg",
+    "celebs01/cameron_diaz_39.jpg",
+    "celebs01/cate_blanchett_14.jpg",
+    "celebs01/charlize_theron_19.jpg",
+    "celebs01/clint_eastwood_21.jpg",
+    "celebs01/clint_eastwood_25.jpg",
+    "celebs01/clint_eastwood_28.jpg",
+    "celebs01/clint_eastwood_30.jpg",
+    "celebs01/dali_20.webp",
+    "celebs01/dali_32.jpg",
+    "celebs01/denzel_washington_2.jpg",
+    "celebs01/drake_11.jpg",
+    "celebs01/drake_18.jpg",
+    "celebs01/drake_2.jpg",
+    "celebs01/drake_26.png",
+    "celebs01/drake_28.jpg",
+    "celebs01/drake_32.jpg",
+    "celebs01/drake_4.jpg",
+    "celebs01/drake_5.jpg",
+    "celebs01/drake_6.webp",
+    "celebs01/drake_8.jpg",
+    "celebs01/drake_9.jpeg",
+    "celebs01/drew_barrymore_32.jpg",
+    "celebs01/elizabeth_taylor_1.jpg",
+    "celebs01/elizabeth_taylor_14.jpg",
+    "celebs01/elizabeth_taylor_2.jpg",
+    "celebs01/elizabeth_taylor_23.jpg",
+    "celebs01/elizabeth_taylor_4.jpg",
+    "celebs01/elizabeth_taylor_6.jpg",
+    "celebs01/emma_stone_38.jpg",
+    "celebs01/faye_dunaway_33.jpg",
+    "celebs01/grace_kelly_16.jpg",
+    "celebs01/harrison_ford_13.jpg",
+    "celebs01/harrison_ford_29.jpg",
+    "celebs01/jack_nicholson_18.jpg",
+    "celebs01/jack_nicholson_33.jpg",
+    "celebs01/jackie_chan_28.jpg",
+    "celebs01/james_dean_13.webp",
+    "celebs01/james_dean_23.jpeg",
+    "celebs01/james_dean_4.png",
+    "celebs01/james_dean_7.jpg",
+    "celebs01/james_dean_9.jpg",
+    "celebs01/jane_fonda_37.jpg",
+    "celebs01/jane_fonda_4.jpg",
+    "celebs01/jane_goodall_25.jpg",
+    "celebs01/jane_goodall_33.png",
+    "celebs01/jane_goodall_34.jpg",
+    "celebs01/jane_goodall_5.jpg",
+    "celebs01/jennifer_lawrence_15.jpg",
+    "celebs01/jessica_alba_22.jpg",
+    "celebs01/jessica_lange_25.jpg",
+    "celebs01/jodie_foster_39.jpg",
+    "celebs01/john_f._kennedy_2.jpg",
+    "celebs01/john_wayne_1.jpg",
+    "celebs01/john_wayne_20.jpg",
+    "celebs01/john_wayne_4.jpg",
+    "celebs01/johnny_depp_10.jpg",
+    "celebs01/johnny_depp_11.jpg",
+    "celebs01/johnny_depp_28.jpg",
+    "celebs01/johnny_depp_32.jpg",
+    "celebs01/johnny_depp_33.jpg",
+    "celebs01/johnny_depp_4.jpg",
+    "celebs01/johnny_depp_7.webp",
+    "celebs01/julia_roberts_12.jpg",
+    "celebs01/julianne_moore_5.jpg",
+    "celebs01/justin_bieber_28.jpg",
+    "celebs01/justin_trudeau_14.jpeg",
+    "celebs01/katharine_hepburn_1.jpg",
+    "celebs01/katy_perry_14.jpeg",
+    "celebs01/katy_perry_22.jpg",
+    "celebs01/keanu_reeves_7.jpg",
+    "celebs01/lady_gaga_12.jpg",
+    "celebs01/lana_del_rey_5.jpg",
+    "celebs01/laurence_fishburne_18.jpg",
+    "celebs01/leonard_cohen_30.jpg",
+    "celebs01/leonard_cohen_36.webp",
+    "celebs01/madonna_28.webp",
+    "celebs01/marilyn_monroe_7.jpg",
+    "celebs01/marlon_brando_10.jpg",
+    "celebs01/matt_damon_20.jpg",
+    "celebs01/meryl_streep_1.jpg",
+    "celebs01/michael_j._fox_14.jpg",
+    "celebs01/michael_j._fox_2.jpg",
+    "celebs01/michael_j._fox_27.jpg",
+    "celebs01/michael_j._fox_4.jpg",
+    "celebs01/michael_j._fox_6.jpg",
+    "celebs01/michael_jackson_1.jpg",
+    "celebs01/michael_jackson_44.webp",
+    "celebs01/michael_jordan_11.webp",
+    "celebs01/michael_jordan_2.jpg",
+    "celebs01/michael_jordan_3.jpeg",
+    "celebs01/michelle_obama_19.png",
+    "celebs01/michelle_obama_33.jpg",
+    "celebs01/michelle_obama_36.jpg",
+    "celebs01/morgan_freeman_25.jpg",
+    "celebs01/muhammad_ali_37.jpg",
+    "celebs01/muhammad_ali_39.jpg",
+    "celebs01/muhammad_ali_4.jpg",
+    "celebs01/natalie_portman_3.jpg",
+    "celebs01/nicolas_cage_28.jpg",
+    "celebs01/nicole_kidman_40.jpg",
+    "celebs01/pablo_picasso_1.jpg",
+    "celebs01/pablo_picasso_19.jpeg",
+    "celebs01/pablo_picasso_2.jpg",
+    "celebs01/paul_newman_29.jpg",
+    "celebs01/pedro_pascal_5.jpg",
+    "celebs01/penelope_cruz_17.jpg",
+    "celebs01/princess_diana_19.jpg",
+    "celebs01/reese_witherspoon_25.jpg",
+    "celebs01/rihanna_37.jpg",
+    "celebs01/robert_de_niro_13.jpg",
+    "celebs01/rosalia_12.jpg",
+    "celebs01/samuel_l._jackson_21.jpg",
+    "celebs01/sandra_bullock_24.jpg",
+    "celebs01/scarlett_johansson_4.jpg",
+    "celebs01/sean_connery_19.jpg",
+    "celebs01/sophia_loren_7.jpg",
+    "celebs01/sophia_loren_8.jpg",
+    "celebs01/steve_mcqueen_7.jpg",
+    "celebs01/taylor_swift_15.jpg",
+    "celebs01/taylor_swift_16.jpg",
+    "celebs01/taylor_swift_7.jpg",
+    "celebs01/tom_cruise_36.jpeg",
+    "celebs01/tom_hanks_10.jpg",
+    "celebs01/werner_herzog_13.jpg",
+    "celebs01/werner_herzog_19.jpeg",
+    "celebs01/will_smith_10.jpg",
+    "celebs01/will_smith_17.jpg",
+    "celebs01/will_smith_29.jpg",
+    "celebs01/will_smith_9.png"
+  ],
+  "qualityGateRejected": [
+    {
+      "source": "celebs01/al_pacino_27.jpg",
+      "file": "al_pacino_27.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/amy_winehouse_18.jpg",
+      "file": "amy_winehouse_18.webp",
+      "reason": "interocular dist 0.0688 out of range"
+    },
+    {
+      "source": "celebs01/amy_winehouse_21.jpg",
+      "file": "amy_winehouse_21.webp",
+      "reason": "interocular dist 0.0595 out of range"
+    },
+    {
+      "source": "celebs01/amy_winehouse_22.jpg",
+      "file": "amy_winehouse_22.webp",
+      "reason": "interocular dist 0.0720 out of range"
+    },
+    {
+      "source": "celebs01/amy_winehouse_8.jpg",
+      "file": "amy_winehouse_8.webp",
+      "reason": "interocular dist 0.0482 out of range"
+    },
+    {
+      "source": "celebs01/amy_winehouse_9.jpg",
+      "file": "amy_winehouse_9.webp",
+      "reason": "interocular dist 0.0702 out of range"
+    },
+    {
+      "source": "celebs01/andy_warhol_2.jpg",
+      "file": "andy_warhol_2.webp",
+      "reason": "interocular dist 0.0755 out of range"
+    },
+    {
+      "source": "celebs01/anne_hathaway_5.jpg",
+      "file": "anne_hathaway_5.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/ariana_grande_6.jpg",
+      "file": "ariana_grande_6.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/arnold_schwarzenegger_12.jpg",
+      "file": "arnold_schwarzenegger_12.webp",
+      "reason": "interocular dist 0.0316 out of range"
+    },
+    {
+      "source": "celebs01/arnold_schwarzenegger_21.jpg",
+      "file": "arnold_schwarzenegger_21.webp",
+      "reason": "interocular dist 0.0691 out of range"
+    },
+    {
+      "source": "celebs01/arnold_schwarzenegger_26.png",
+      "file": "arnold_schwarzenegger_26.webp",
+      "reason": "interocular dist 0.0746 out of range"
+    },
+    {
+      "source": "celebs01/arnold_schwarzenegger_3.jpg",
+      "file": "arnold_schwarzenegger_3.webp",
+      "reason": "interocular dist 0.0758 out of range"
+    },
+    {
+      "source": "celebs01/arnold_schwarzenegger_7.jpg",
+      "file": "arnold_schwarzenegger_7.webp",
+      "reason": "interocular dist 0.0756 out of range"
+    },
+    {
+      "source": "celebs01/arnold_schwarzenegger_8.jpg",
+      "file": "arnold_schwarzenegger_8.webp",
+      "reason": "interocular dist 0.0790 out of range"
+    },
+    {
+      "source": "celebs01/audrey_hepburn_7.jpg",
+      "file": "audrey_hepburn_7.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/bad_bunny_1.jpg",
+      "file": "bad_bunny_1.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/bad_bunny_2.webp",
+      "file": "bad_bunny_2.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/bad_bunny_20.png",
+      "file": "bad_bunny_20.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/bad_bunny_32.jpg",
+      "file": "bad_bunny_32.webp",
+      "reason": "interocular dist 0.0570 out of range"
+    },
+    {
+      "source": "celebs01/bad_bunny_41.jpg",
+      "file": "bad_bunny_41.webp",
+      "reason": "interocular dist 0.0579 out of range"
+    },
+    {
+      "source": "celebs01/bad_bunny_8.jpg",
+      "file": "bad_bunny_8.webp",
+      "reason": "interocular dist 0.0683 out of range"
+    },
+    {
+      "source": "celebs01/bette_davis_28.jpg",
+      "file": "bette_davis_28.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/bob_dylan_17.jpg",
+      "file": "bob_dylan_17.webp",
+      "reason": "interocular dist 0.0569 out of range"
+    },
+    {
+      "source": "celebs01/bob_dylan_2.jpg",
+      "file": "bob_dylan_2.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/bob_dylan_26.jpg",
+      "file": "bob_dylan_26.webp",
+      "reason": "interocular dist 0.0735 out of range"
+    },
+    {
+      "source": "celebs01/bob_dylan_3.jpg",
+      "file": "bob_dylan_3.webp",
+      "reason": "interocular dist 0.0752 out of range"
+    },
+    {
+      "source": "celebs01/bob_dylan_7.jpg",
+      "file": "bob_dylan_7.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/bob_dylan_9.jpg",
+      "file": "bob_dylan_9.webp",
+      "reason": "interocular dist 0.0707 out of range"
+    },
+    {
+      "source": "celebs01/bob_marley_3.jpg",
+      "file": "bob_marley_3.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/bob_marley_33.jpeg",
+      "file": "bob_marley_33.webp",
+      "reason": "interocular dist 0.0721 out of range"
+    },
+    {
+      "source": "celebs01/bob_ross_1.jpg",
+      "file": "bob_ross_1.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/bob_ross_11.jpg",
+      "file": "bob_ross_11.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/bob_ross_16.jpg",
+      "file": "bob_ross_16.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/bob_ross_17.jpeg",
+      "file": "bob_ross_17.webp",
+      "reason": "interocular dist 0.0561 out of range"
+    },
+    {
+      "source": "celebs01/bob_ross_3.jpg",
+      "file": "bob_ross_3.webp",
+      "reason": "interocular dist 0.0620 out of range"
+    },
+    {
+      "source": "celebs01/bob_ross_35.jpg",
+      "file": "bob_ross_35.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/bob_ross_5.jpg",
+      "file": "bob_ross_5.webp",
+      "reason": "interocular dist 0.0666 out of range"
+    },
+    {
+      "source": "celebs01/brigitte_bardot_18.jpg",
+      "file": "brigitte_bardot_18.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/cameron_diaz_39.jpg",
+      "file": "cameron_diaz_39.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/cate_blanchett_14.jpg",
+      "file": "cate_blanchett_14.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/charlize_theron_19.jpg",
+      "file": "charlize_theron_19.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/clint_eastwood_21.jpg",
+      "file": "clint_eastwood_21.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/clint_eastwood_25.jpg",
+      "file": "clint_eastwood_25.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/clint_eastwood_28.jpg",
+      "file": "clint_eastwood_28.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/clint_eastwood_30.jpg",
+      "file": "clint_eastwood_30.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/dali_20.webp",
+      "file": "dali_20.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/dali_32.jpg",
+      "file": "dali_32.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/denzel_washington_2.jpg",
+      "file": "denzel_washington_2.webp",
+      "reason": "interocular dist 0.0791 out of range"
+    },
+    {
+      "source": "celebs01/drake_11.jpg",
+      "file": "drake_11.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/drake_18.jpg",
+      "file": "drake_18.webp",
+      "reason": "interocular dist 0.0797 out of range"
+    },
+    {
+      "source": "celebs01/drake_2.jpg",
+      "file": "drake_2.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/drake_26.png",
+      "file": "drake_26.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/drake_28.jpg",
+      "file": "drake_28.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/drake_32.jpg",
+      "file": "drake_32.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/drake_4.jpg",
+      "file": "drake_4.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/drake_5.jpg",
+      "file": "drake_5.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/drake_6.webp",
+      "file": "drake_6.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/drake_8.jpg",
+      "file": "drake_8.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/drake_9.jpeg",
+      "file": "drake_9.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/drew_barrymore_32.jpg",
+      "file": "drew_barrymore_32.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/elizabeth_taylor_1.jpg",
+      "file": "elizabeth_taylor_1.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/elizabeth_taylor_14.jpg",
+      "file": "elizabeth_taylor_14.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/elizabeth_taylor_2.jpg",
+      "file": "elizabeth_taylor_2.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/elizabeth_taylor_23.jpg",
+      "file": "elizabeth_taylor_23.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/elizabeth_taylor_4.jpg",
+      "file": "elizabeth_taylor_4.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/elizabeth_taylor_6.jpg",
+      "file": "elizabeth_taylor_6.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/emma_stone_38.jpg",
+      "file": "emma_stone_38.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/faye_dunaway_33.jpg",
+      "file": "faye_dunaway_33.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/grace_kelly_16.jpg",
+      "file": "grace_kelly_16.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/harrison_ford_13.jpg",
+      "file": "harrison_ford_13.webp",
+      "reason": "interocular dist 0.0729 out of range"
+    },
+    {
+      "source": "celebs01/harrison_ford_29.jpg",
+      "file": "harrison_ford_29.webp",
+      "reason": "interocular dist 0.0659 out of range"
+    },
+    {
+      "source": "celebs01/jack_nicholson_18.jpg",
+      "file": "jack_nicholson_18.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/jack_nicholson_33.jpg",
+      "file": "jack_nicholson_33.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/jackie_chan_28.jpg",
+      "file": "jackie_chan_28.webp",
+      "reason": "interocular dist 0.0637 out of range"
+    },
+    {
+      "source": "celebs01/james_dean_13.webp",
+      "file": "james_dean_13.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/james_dean_23.jpeg",
+      "file": "james_dean_23.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/james_dean_4.png",
+      "file": "james_dean_4.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/james_dean_7.jpg",
+      "file": "james_dean_7.webp",
+      "reason": "interocular dist 0.0784 out of range"
+    },
+    {
+      "source": "celebs01/james_dean_9.jpg",
+      "file": "james_dean_9.webp",
+      "reason": "interocular dist 0.0699 out of range"
+    },
+    {
+      "source": "celebs01/jane_fonda_37.jpg",
+      "file": "jane_fonda_37.webp",
+      "reason": "interocular dist 0.0578 out of range"
+    },
+    {
+      "source": "celebs01/jane_fonda_4.jpg",
+      "file": "jane_fonda_4.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/jane_goodall_25.jpg",
+      "file": "jane_goodall_25.webp",
+      "reason": "interocular dist 0.0771 out of range"
+    },
+    {
+      "source": "celebs01/jane_goodall_33.png",
+      "file": "jane_goodall_33.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/jane_goodall_34.jpg",
+      "file": "jane_goodall_34.webp",
+      "reason": "interocular dist 0.0763 out of range"
+    },
+    {
+      "source": "celebs01/jane_goodall_5.jpg",
+      "file": "jane_goodall_5.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/jennifer_lawrence_15.jpg",
+      "file": "jennifer_lawrence_15.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/jessica_alba_22.jpg",
+      "file": "jessica_alba_22.webp",
+      "reason": "interocular dist 0.0580 out of range"
+    },
+    {
+      "source": "celebs01/jessica_lange_25.jpg",
+      "file": "jessica_lange_25.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/jodie_foster_39.jpg",
+      "file": "jodie_foster_39.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/john_f._kennedy_2.jpg",
+      "file": "john_f._kennedy_2.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/john_wayne_1.jpg",
+      "file": "john_wayne_1.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/john_wayne_20.jpg",
+      "file": "john_wayne_20.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/john_wayne_4.jpg",
+      "file": "john_wayne_4.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/johnny_depp_10.jpg",
+      "file": "johnny_depp_10.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/johnny_depp_11.jpg",
+      "file": "johnny_depp_11.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/johnny_depp_28.jpg",
+      "file": "johnny_depp_28.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/johnny_depp_32.jpg",
+      "file": "johnny_depp_32.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/johnny_depp_33.jpg",
+      "file": "johnny_depp_33.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/johnny_depp_4.jpg",
+      "file": "johnny_depp_4.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/johnny_depp_7.webp",
+      "file": "johnny_depp_7.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/julia_roberts_12.jpg",
+      "file": "julia_roberts_12.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/julianne_moore_5.jpg",
+      "file": "julianne_moore_5.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/justin_bieber_28.jpg",
+      "file": "justin_bieber_28.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/justin_trudeau_14.jpeg",
+      "file": "justin_trudeau_14.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/katharine_hepburn_1.jpg",
+      "file": "katharine_hepburn_1.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/katy_perry_14.jpeg",
+      "file": "katy_perry_14.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/katy_perry_22.jpg",
+      "file": "katy_perry_22.webp",
+      "reason": "interocular dist 0.0679 out of range"
+    },
+    {
+      "source": "celebs01/keanu_reeves_7.jpg",
+      "file": "keanu_reeves_7.webp",
+      "reason": "interocular dist 0.0691 out of range"
+    },
+    {
+      "source": "celebs01/lady_gaga_12.jpg",
+      "file": "lady_gaga_12.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/lana_del_rey_5.jpg",
+      "file": "lana_del_rey_5.webp",
+      "reason": "interocular dist 0.0751 out of range"
+    },
+    {
+      "source": "celebs01/laurence_fishburne_18.jpg",
+      "file": "laurence_fishburne_18.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/leonard_cohen_30.jpg",
+      "file": "leonard_cohen_30.webp",
+      "reason": "interocular dist 0.0757 out of range"
+    },
+    {
+      "source": "celebs01/leonard_cohen_36.webp",
+      "file": "leonard_cohen_36.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/madonna_28.webp",
+      "file": "madonna_28.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/marilyn_monroe_7.jpg",
+      "file": "marilyn_monroe_7.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/marlon_brando_10.jpg",
+      "file": "marlon_brando_10.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/matt_damon_20.jpg",
+      "file": "matt_damon_20.webp",
+      "reason": "interocular dist 0.0780 out of range"
+    },
+    {
+      "source": "celebs01/meryl_streep_1.jpg",
+      "file": "meryl_streep_1.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michael_j._fox_14.jpg",
+      "file": "michael_j._fox_14.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michael_j._fox_2.jpg",
+      "file": "michael_j._fox_2.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michael_j._fox_27.jpg",
+      "file": "michael_j._fox_27.webp",
+      "reason": "interocular dist 0.0737 out of range"
+    },
+    {
+      "source": "celebs01/michael_j._fox_4.jpg",
+      "file": "michael_j._fox_4.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michael_j._fox_6.jpg",
+      "file": "michael_j._fox_6.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michael_jackson_1.jpg",
+      "file": "michael_jackson_1.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michael_jackson_44.webp",
+      "file": "michael_jackson_44.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michael_jordan_11.webp",
+      "file": "michael_jordan_11.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michael_jordan_2.jpg",
+      "file": "michael_jordan_2.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/michael_jordan_3.jpeg",
+      "file": "michael_jordan_3.webp",
+      "reason": "interocular dist 0.0580 out of range"
+    },
+    {
+      "source": "celebs01/michelle_obama_19.png",
+      "file": "michelle_obama_19.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michelle_obama_33.jpg",
+      "file": "michelle_obama_33.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/michelle_obama_36.jpg",
+      "file": "michelle_obama_36.webp",
+      "reason": "interocular dist 0.0705 out of range"
+    },
+    {
+      "source": "celebs01/morgan_freeman_25.jpg",
+      "file": "morgan_freeman_25.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/muhammad_ali_37.jpg",
+      "file": "muhammad_ali_37.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/muhammad_ali_39.jpg",
+      "file": "muhammad_ali_39.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/muhammad_ali_4.jpg",
+      "file": "muhammad_ali_4.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/natalie_portman_3.jpg",
+      "file": "natalie_portman_3.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/nicolas_cage_28.jpg",
+      "file": "nicolas_cage_28.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/nicole_kidman_40.jpg",
+      "file": "nicole_kidman_40.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/pablo_picasso_1.jpg",
+      "file": "pablo_picasso_1.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/pablo_picasso_19.jpeg",
+      "file": "pablo_picasso_19.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/pablo_picasso_2.jpg",
+      "file": "pablo_picasso_2.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/paul_newman_29.jpg",
+      "file": "paul_newman_29.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/pedro_pascal_5.jpg",
+      "file": "pedro_pascal_5.webp",
+      "reason": "interocular dist 0.0782 out of range"
+    },
+    {
+      "source": "celebs01/penelope_cruz_17.jpg",
+      "file": "penelope_cruz_17.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/princess_diana_19.jpg",
+      "file": "princess_diana_19.webp",
+      "reason": "interocular dist 0.0655 out of range"
+    },
+    {
+      "source": "celebs01/reese_witherspoon_25.jpg",
+      "file": "reese_witherspoon_25.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/rihanna_37.jpg",
+      "file": "rihanna_37.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/robert_de_niro_13.jpg",
+      "file": "robert_de_niro_13.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/rosalia_12.jpg",
+      "file": "rosalia_12.webp",
+      "reason": "interocular dist 0.0522 out of range"
+    },
+    {
+      "source": "celebs01/samuel_l._jackson_21.jpg",
+      "file": "samuel_l._jackson_21.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/sandra_bullock_24.jpg",
+      "file": "sandra_bullock_24.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/scarlett_johansson_4.jpg",
+      "file": "scarlett_johansson_4.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/sean_connery_19.jpg",
+      "file": "sean_connery_19.webp",
+      "reason": "interocular dist 0.0796 out of range"
+    },
+    {
+      "source": "celebs01/sophia_loren_7.jpg",
+      "file": "sophia_loren_7.webp",
+      "reason": "interocular dist 0.0705 out of range"
+    },
+    {
+      "source": "celebs01/sophia_loren_8.jpg",
+      "file": "sophia_loren_8.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/steve_mcqueen_7.jpg",
+      "file": "steve_mcqueen_7.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/taylor_swift_15.jpg",
+      "file": "taylor_swift_15.webp",
+      "reason": "interocular dist 0.0528 out of range"
+    },
+    {
+      "source": "celebs01/taylor_swift_16.jpg",
+      "file": "taylor_swift_16.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/taylor_swift_7.jpg",
+      "file": "taylor_swift_7.webp",
+      "reason": "interocular dist 0.0714 out of range"
+    },
+    {
+      "source": "celebs01/tom_cruise_36.jpeg",
+      "file": "tom_cruise_36.webp",
+      "reason": "interocular dist 0.0561 out of range"
+    },
+    {
+      "source": "celebs01/tom_hanks_10.jpg",
+      "file": "tom_hanks_10.webp",
+      "reason": "interocular dist 0.0779 out of range"
+    },
+    {
+      "source": "celebs01/werner_herzog_13.jpg",
+      "file": "werner_herzog_13.webp",
+      "reason": "interocular dist 0.0702 out of range"
+    },
+    {
+      "source": "celebs01/werner_herzog_19.jpeg",
+      "file": "werner_herzog_19.webp",
+      "reason": "interocular dist 0.0688 out of range"
+    },
+    {
+      "source": "celebs01/will_smith_10.jpg",
+      "file": "will_smith_10.webp",
+      "reason": "low confidence 0.1"
+    },
+    {
+      "source": "celebs01/will_smith_17.jpg",
+      "file": "will_smith_17.webp",
+      "reason": "low confidence 0.5"
+    },
+    {
+      "source": "celebs01/will_smith_29.jpg",
+      "file": "will_smith_29.webp",
+      "reason": "interocular dist 0.0616 out of range"
+    },
+    {
+      "source": "celebs01/will_smith_9.png",
+      "file": "will_smith_9.webp",
+      "reason": "low confidence 0.5"
+    }
+  ],
+  "postCropRejected": [],
+  "missingSources": [],
+  "missingDerivativeOutputs": []
+}

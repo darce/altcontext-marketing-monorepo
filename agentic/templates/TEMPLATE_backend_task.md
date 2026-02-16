@@ -3,7 +3,7 @@
 > Extends [TEMPLATE_task.md](./TEMPLATE_task.md) with backend-specific sections.
 > Use for all implementation plans under `agentic/tasks/backend-tasks/`.
 >
-> Rules that apply to every backend task live in the instruction files below — do not restate them in task docs.
+> Rules that apply to every backend task are routed via [`instructions.md`](../instructions.md#backend-tasks) — do not restate them in task docs.
 > Task docs contain only **task-specific** principles, patterns, and checklist items.
 
 ---
@@ -12,16 +12,15 @@
 
 ## Applicable Instruction Files
 
-Per the [routing table](../instructions.md), load for every backend task:
+Standard backend files per the [routing table](../instructions.md#backend-tasks).
 
-| File | Reason |
-|------|--------|
-| [`backend/service-rules.md`](../instructions/backend/service-rules.md) | Makefile orchestration, API behaviour, privacy |
-| [`backend/verification.md`](../instructions/backend/verification.md) | Build gates, deterministic tool matrix, manual review rules, task plan requirements |
-| [`language-standards.md`](../instructions/language-standards.md) | TS required rules (arrow fns, no `any`, percentile correctness, semantic naming, transaction writes, no dead exports, no blind casts, shared schemas) |
-| [`verification-and-agent-roe.md`](../instructions/verification-and-agent-roe.md) | Tool-calling conventions, Make target naming, Do/Don't |
+[Add task-specific instruction files here if needed, e.g.:
 
-[Add task-specific instruction files here if needed.]
+| File | Load when… |
+|------|------------|
+| [`available-tools.md`](../instructions/available-tools.md) | Task involves flyctl, deployment, or infrastructure commands |
+
+Remove this table if no task-specific additions are needed.]
 
 ## Problem Statement
 
@@ -70,7 +69,7 @@ Per the [routing table](../instructions.md), load for every backend task:
 
 ## Agent Do / Don't (This Task)
 
-[Standard Do/Don't from `backend/verification.md` always apply. List only **task-specific** additions here.]
+[Standard Do/Don't from `backend/verification.md` apply once loaded. List only **task-specific** additions here.]
 
 ### Do
 

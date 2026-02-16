@@ -1,0 +1,33 @@
+# Monorepo-root .dockerignore — build context for Fly deploy
+# Only backend/ and dashboard/ source are needed by the Dockerfile.
+
+.git
+**/.env
+**/.env.*
+!**/.env.example
+**/node_modules
+**/dist
+**/.svelte-kit
+
+# Workspaces not needed in the Docker build
+static/
+agentic/
+
+# Build artefacts & tooling
+**/*.md
+**/test
+**/Makefile
+**/.prettierignore
+**/eslint.config.js
+**/stylelint.config.js
+
+# Frontend offline tooling
+frontend/
+offline-scripts/
+input-images/
+**/__pycache__
+*.py
+*.task
+
+# Dashboard build output (rebuilt in Docker)
+dashboard/build/

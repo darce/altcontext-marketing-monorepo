@@ -12,6 +12,7 @@ import {
   resolveIngestEndpoint,
 } from "./lib/ingest-rejections.js";
 import { tableRef } from "./lib/sql.js";
+import { mountDashboard } from "./lib/dashboard.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
 import { leadRoutes } from "./routes/leads.js";
@@ -144,6 +145,9 @@ export const createApp = async (): Promise<FastifyInstance> => {
   await app.register(eventRoutes);
   await app.register(leadRoutes);
   await app.register(metricsRoutes);
+
+  // Dashboard catch-all — must be registered AFTER API routes so /v1/* takes priority.
+  await mountDashboard(app);
 
   return app;
 };

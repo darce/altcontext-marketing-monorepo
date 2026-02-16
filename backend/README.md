@@ -31,6 +31,6 @@ Backend service for email capture and marketing intelligence workflows.
 
 ## Security and Browser Access
 
-- Configure `CORS_ALLOWED_ORIGINS` as a comma-separated allowlist for frontend hosts.
+- Configure `CORS_ALLOWED_ORIGINS` as a comma-separated allowlist for static site and dashboard hosts.
 - `POST /v1/leads/delete` requires the `x-admin-key` header matching `ADMIN_API_KEY`.
 - `GET /v1/metrics/summary` requires the same `x-admin-key`/`ADMIN_API_KEY` admin auth.

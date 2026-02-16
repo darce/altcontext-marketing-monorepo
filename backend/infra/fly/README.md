@@ -11,10 +11,12 @@ Infrastructure configuration for deploying the marketing backend to [Fly.io](htt
 
 ## Files
 
-| File         | Purpose                                                               |
-| ------------ | --------------------------------------------------------------------- |
-| `fly.toml`   | Fly app configuration — VM size, regions, health checks, deploy hooks |
-| `Dockerfile` | Multi-stage build: compile TS → production image (node:22-slim)       |
+| File                   | Purpose                                                             |
+| ---------------------- | ------------------------------------------------------------------- |
+| `backend/fly.toml`     | Fly app configuration — VM size, regions, health checks, build path |
+| `infra/fly/Dockerfile` | Multi-stage build: compile TS → production image (node:22-slim)     |
+
+> `fly.toml` lives at the backend root so flyctl auto-discovers it. The Dockerfile stays in `infra/fly/` and is referenced via `[build] dockerfile`.
 
 ## Prerequisites
 
@@ -43,7 +45,6 @@ make -C backend fly-deploy
 ```bash
 make -C backend fly-deploy        # quality gates → build → deploy → verify
 make -C backend fly-deploy-only   # deploy without quality gates
-make -C backend fly-migrate       # run Prisma migrations (pre-deploy)
 make -C backend fly-secrets       # import .env.production secrets (staged)
 make -C backend fly-logs          # tail production logs
 make -C backend fly-ssh           # SSH into the running machine
@@ -52,17 +53,18 @@ make -C backend fly-checks        # show health check state
 make -C backend fly-pg-attach     # attach a Fly Postgres cluster
 ```
 
+> **Migrations**: Prisma is excluded from the production image (`npm ci --omit=dev`). Run migrations locally via `fly proxy` + `npx prisma migrate deploy`. See task 0.4.1 Phase 1.
+
 ## Deploy Workflow
 
 ```
 make fly-deploy
   ├── make check (typecheck + lint + format)
-  ├── fly deploy --config infra/fly/fly.toml
-  │   ├── Docker build (multi-stage)
-  │   │   ├── Stage 1: npm ci → prisma generate → tsc build
-  │   │   └── Stage 2: npm ci --omit=dev → copy dist + prisma artifacts
+  ├── fly deploy (reads backend/fly.toml)
+  │   ├── Docker build (multi-stage, infra/fly/Dockerfile)
+  │   │   ├── Stage 1: npm ci → tsc build
+  │   │   └── Stage 2: npm ci --omit=dev → copy dist/
   │   ├── Push image to Fly registry
-  │   ├── Run release_command (prisma migrate deploy)
   │   └── Start machine
   └── fly checks list (verify health)
 ```
@@ -78,9 +80,9 @@ The app runs on a 256 MB `shared-cpu-1x` machine. Memory budget:
 | App code + Fastify + deps       | ~10–20 MB     |
 | **Available headroom**          | ~120–170 MB   |
 
-> **Note**: After completing [task 0.3 (Remove Prisma Runtime)](../../../agentic/tasks/backend-tasks/0.3.remove-prisma-runtime.md), the Prisma library engine (~40–80 MB) will be removed, making 256 MB viable. Until then, OOM risk exists on cold start.
+Prisma has been removed from the production image (task 0.3). The `pg` driver runs lean within 256 MB.
 
-V8 heap is capped at 384 MB via `--max-old-space-size=384` in the Dockerfile CMD.
+V8 heap is capped at 192 MB via `--max-old-space-size=192` in the Dockerfile CMD.
 
 ## Secrets Management
 
@@ -104,15 +106,15 @@ Secrets are **staged** (not applied immediately). Run `make fly-deploy` to apply
 
 **Check**: `fly logs --config infra/fly/fly.toml` — look for "out of memory".
 
-**Solution**: Complete task 0.3 (remove Prisma runtime) to reduce baseline RSS by ~40–80 MB. Or temporarily increase VM to `memory = '512mb'` in `fly.toml`.
+**Solution**: Check for memory leaks in route handlers or `pg` pool exhaustion. Heap is capped at 192 MB — if needed, increase to `memory = '512mb'` in `fly.toml` temporarily for diagnosis.
 
-### Migrations Fail During Deploy
+### Migrations Fail via Proxy
 
-**Symptom**: `release_command` exits non-zero, deploy rolls back.
+**Symptom**: `prisma migrate deploy` errors when run through `fly proxy`.
 
-**Check**: `fly logs --config infra/fly/fly.toml` — look for migration errors.
+**Check**: Verify the proxy is running (`fly proxy 15432:5432 -a <pg-app>`) and `DATABASE_URL` points to `localhost:15432`.
 
-**Solution**: Run `make fly-migrate` manually to debug. Ensure `DATABASE_URL` secret is set.
+**Solution**: Ensure the Fly Postgres app is running (`fly status -a <pg-app>`). Check credentials from `fly postgres attach`.
 
 ### Health Check Fails
 

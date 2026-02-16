@@ -69,3 +69,42 @@ Extractors may miss:
 - theme token declarations needed for first paint
 
 Maintain a force-include snippet for these.
+
+## WCAG Compliance
+
+The static marketing site must meet **WCAG 2.2 Level AA**.
+
+### Colour Contrast
+
+- All text must meet minimum contrast ratios: **4.5:1** for normal text, **3:1** for large text (≥18pt or ≥14pt bold).
+- UI elements (buttons, form inputs, focus rings) must have **3:1** contrast against adjacent colours.
+- Audit SCSS token values in `styles/_tokens.scss` and adjust as needed. Document approved palette.
+- The face-pose interactive area must have sufficient contrast for any overlaid text or controls.
+
+### Semantic HTML and Accessibility
+
+- Logical heading hierarchy (`h1` → `h2` → `h3`) on every page.
+- All images must have meaningful `alt` text (this is core to AltContext's product — lead by example).
+- Skip-to-content link at the top of every page.
+- Form inputs (email capture) must have associated `<label>` elements and `aria-describedby` for error messages.
+- `aria-live` regions for dynamic content updates (form submission feedback, face-pose status).
+- Focus management: visible `:focus-visible` indicators on all interactive elements (already in critical CSS force-includes).
+
+### Keyboard Navigation
+
+- All interactive elements must be operable via keyboard.
+- The face-pose interaction must degrade gracefully for keyboard-only and screen-reader users (provide static fallback or alternative content).
+- Tab order must follow visual layout.
+
+### Testing
+
+- **Automated**: Lighthouse accessibility audit in CI (score ≥ 90). Additionally, `axe-core` CLI or Playwright integration for detailed WCAG violation detection.
+- **Manual**: Periodic VoiceOver (macOS) and keyboard-only testing.
+- **Build gate**: axe-core AA violations fail the build.
+
+### Delivery
+
+- Phase WCAG-S1: Audit `_tokens.scss` colour palette for contrast compliance. Fix violations.
+- Phase WCAG-S2: Add skip link, review heading hierarchy, add `aria-live` regions, audit `alt` text.
+- Phase WCAG-S3: Keyboard navigation audit for face-pose interaction; add static fallback if needed.
+- Phase WCAG-S4: Integrate Lighthouse + axe-core into CI pipeline.

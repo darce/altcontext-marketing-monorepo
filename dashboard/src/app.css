@@ -1,0 +1,75 @@
+/*
+ * AltContext Dashboard — Global Styles
+ *
+ * Design system: stark, minimal, no border-radius.
+ * Palette: monochrome with signal accents (green/red/amber).
+ * Typography: system mono stack for data, system sans for labels.
+ */
+
+:root {
+  /* Palette */
+  --c-bg: #0a0a0a;
+  --c-surface: #141414;
+  --c-border: #2a2a2a;
+  --c-text: #e0e0e0;
+  --c-text-muted: #808080;
+  --c-accent: #ffffff;
+
+  /* Signal colours */
+  --c-ok: #22c55e;
+  --c-warn: #eab308;
+  --c-err: #ef4444;
+
+  /* Typography */
+  --font-mono: "SF Mono", "Cascadia Code", "Fira Code", ui-monospace, monospace;
+  --font-sans: -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+
+  /* Spacing */
+  --sp-xs: 4px;
+  --sp-sm: 8px;
+  --sp-md: 16px;
+  --sp-lg: 24px;
+  --sp-xl: 40px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--c-text);
+  background: var(--c-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100dvh;
+}
+
+/* Zero border-radius globally */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+a {
+  color: var(--c-accent);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+code,
+pre,
+.mono {
+  font-family: var(--font-mono);
+}

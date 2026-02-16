@@ -35,7 +35,7 @@ The production Dockerfile must not run `npx prisma generate`. Since `tsc` does n
 
 ### Schema changes require external migration
 
-Prisma migrations cannot run from the deployed container. Any schema change (`prisma migrate dev`) must be deployed via `fly proxy` + `prisma migrate deploy` from a dev machine or CI/CD. Ensure `fly.toml` has no `release_command` referencing Prisma.
+Prisma is a dev-only schema management tool \u2014 it must never be in the production image. Any schema change (`prisma migrate dev`) must be applied to the production database via `fly proxy` + `prisma migrate deploy` from a dev machine or CI/CD. Ensure `fly.toml` has no `release_command` referencing Prisma.
 
 ### Type parity with Prisma schema
 
@@ -194,6 +194,17 @@ Unit test mocks that match SQL text by exact string (e.g. `text === 'UPDATE "lea
 
 **Action:** Match SQL patterns with decoupled checks: `text.includes('UPDATE') && text.includes('"leads"')` rather than `text.includes('UPDATE "leads"')`. This survives schema-prefix changes and minor query restructuring.
 
+### 15. Stale Task Checklists
+
+Task checklist items in `agentic/tasks/backend-tasks/` are consistently left unchecked after the corresponding work is completed. This makes roadmap progress invisible and causes duplicate effort when a future review re-investigates already-finished items.
+
+**What to look for:**
+- A PR implements a feature described by a task checklist item, but the `- [ ]` is not changed to `- [x]`
+- Multiple items completed in a single session with none marked off
+- Task file status header still reads "OPEN" when all checklist items are done
+
+**Action:** Before sign-off, open every task file referenced by the work and mark completed items `- [x]`. If all items in a task are complete, add a `> ✅ **CLOSED**` status header. This is a **sign-off blocker** — do not approve a review where completed work is not reflected in the task checklist.
+
 ---
 
 ## Review Protocol
@@ -202,5 +213,6 @@ Unit test mocks that match SQL text by exact string (e.g. `text === 'UPDATE "lea
 2. **Scan this checklist**: Walk the Prisma boundary guards and each defect pattern against every changed file.
 3. **Check `verification.md` manual rules**: Walk the rules not yet enforced by tooling (percentile correctness, metric columns, field naming, blind casts, schema duplication, write-result reuse).
 4. **Document findings**: Use the task template format (Bug/Antipattern/Gap with file, line, action).
-5. **Re-run gates**: `make -C backend audit && make -C backend test` after all fixes.
-6. **Sign-off**: All findings resolved, all gates green.
+5. **Update task checklists**: Open every task file in `agentic/tasks/backend-tasks/` that covers the work under review. Mark completed items `- [x]`. Add `> ✅ **CLOSED**` header if all items are done. **This step is mandatory and blocks sign-off.**
+6. **Re-run gates**: `make -C backend audit && make -C backend test` after all fixes.
+7. **Sign-off**: All findings resolved, all gates green, all task checklists current.

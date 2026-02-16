@@ -3,7 +3,7 @@
 - Backend lives in `backend/` and supports email collection + marketing intelligence workflows.
 - Frontend pages must not depend on backend availability for first render.
 - HTML forms should still degrade gracefully when JS is absent.
-- Full roadmap and data model: `agentic/roadmaps/backend-marketing-server-roadmap.md`.
+- Full roadmap and data model: `agentic/roadmaps/epics/backend-marketing-server.md`.
 
 ## Makefile Orchestration
 
@@ -103,9 +103,21 @@ make -C backend fly-ssh           # shell into machine
 make -C backend fly-pg-attach     # wire DATABASE_URL from Fly Postgres
 ```
 
+### Fly Postgres (Unmanaged Legacy Cluster)
+
+The production database is an **unmanaged Fly Postgres cluster** provisioned via `fly postgres create`. This is *not* Fly's managed database offering — see [Fly Postgres overview](https://fly.io/docs/flyctl/postgres/). The backend team is responsible for:
+
+- **Backups**: No automatic backups. Scheduled `pg_dump` must be configured (cron job or GitHub Action).
+- **Upgrades**: Major Postgres version upgrades are manual — provision a new cluster, migrate data, reattach.
+- **Monitoring**: Use `fly ssh console -a <pg-app>` + `pg_stat_activity` or `fly logs -a <pg-app>` for health. Fly does not provide managed monitoring.
+- **Failover**: Single-node by default. Can add a replica with `fly machine clone` but failover is manual.
+- **Connection string**: Set automatically by `fly postgres attach <pg-app>` as the `DATABASE_URL` secret on the consumer app. Do not set `DATABASE_URL` manually.
+
+The cluster runs in the same Fly private network as the backend app — no SSL required for internal connections.
+
 ### Resource Constraints
 
-**256MB VM** is the target for Node.js 22 + `pg` driver on Fly.io. Prisma has been removed from the production runtime (task 0.3).
+**256MB VM** is the target for Node.js 22 + `pg` driver on Fly.io. Prisma is a dev-only dependency — it is not present in the production image.
 
 **Memory breakdown (pg driver, no Prisma):**
 - V8 + Node.js runtime: ~40–60MB
@@ -117,11 +129,14 @@ make -C backend fly-pg-attach     # wire DATABASE_URL from Fly Postgres
 - `fly.toml`: `memory = '256mb'` in `[[vm]]` block
 - Dockerfile CMD: `node --max-old-space-size=192 dist/server.js` (caps V8 heap at 192MB)
 
-**Migrations:**
-- Prisma remains in `devDependencies` for schema management and `prisma migrate dev`.
-- Migrations CANNOT be run from the deployed container — Prisma is excluded from the production image.
-- Run `prisma migrate deploy` from CI/CD (GitHub Actions) or locally via `fly proxy` to the remote database.
-- The `release_command` in `fly.toml` has been removed.
+### Migrations
+
+Prisma is a **dev-only** tool used for schema management (`prisma migrate dev`) on developer machines. It is excluded from the production image via `npm ci --omit=dev`.
+
+- Prisma must **never** be added to production dependencies or the production Docker image.
+- Migrations CANNOT be run from the deployed container.
+- Apply migrations to the production database from a dev machine via `fly proxy` + `npx prisma migrate deploy`, or from CI/CD.
+- `fly.toml` must not contain a `release_command` referencing Prisma.
 
 ## Deployment (Oracle Cloud Infrastructure Always Free)
 
@@ -179,8 +194,8 @@ The backend can also deploy to OCI Always Free tier. OCI CLI patterns and comman
 - **Container runtime**: Docker + Docker Compose installed via cloud-init
 - **Memory**: 1 GB total — requires lean configuration:
   - Node.js with `--max-old-space-size=512` (cap heap at ~512MB)
-  - Prisma with `engineType = "library"`
   - PostgreSQL with shared_buffers=128MB, effective_cache_size=256MB
+  - No Prisma in production — Prisma is dev-only (see § Migrations)
 
 **Migration path to managed DB:**
 - Once validated, can migrate to Always Free Autonomous Database (20 GB, 1 OCPU)

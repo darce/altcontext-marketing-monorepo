@@ -162,9 +162,11 @@ stop: db-stop  ## Stop local Postgres (server stopped via Ctrl-C)
 # ---------------------------------------------------------------------------
 # Fly.io deployment
 # ---------------------------------------------------------------------------
+# fly.toml lives at backend/fly.toml — flyctl auto-discovers it from cwd.
+
 .PHONY: fly-launch fly-deploy fly-deploy-only fly-secrets fly-logs fly-ssh fly-status fly-checks fly-pg-attach
 
-fly-launch:  ## First-time Fly app scaffold (generates fly.toml + Dockerfile)
+fly-launch:  ## First-time Fly app scaffold
 	fly launch
 
 fly-deploy: check  ## Full deploy: quality gates → build → push → verify

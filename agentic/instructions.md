@@ -6,8 +6,9 @@ Goal: load only the minimum instruction files required for the current task to r
 
 ## Monorepo Scope
 
-- `frontend/`: static marketing site and build tooling
+- `static/`: static marketing site and build tooling (formerly `frontend/`)
 - `backend/`: email collection and marketing intelligence server
+- `dashboard/`: SvelteKit admin dashboard — co-deployed with backend on the same Fly.io machine
 
 ## Cold-Start Load Protocol
 
@@ -20,19 +21,19 @@ Goal: load only the minimum instruction files required for the current task to r
 
 ## Task Routing Table
 
-### Frontend tasks
+### Static site tasks
 
 > Build pipeline, SCSS/CSS, runtime JS, face-pose, derivatives, offline Python scripts, local dev, performance, deploy to GitHub Pages.
 
 | File | When |
 |------|------|
-| [`frontend/architecture.md`](./instructions/frontend/architecture.md) | Always for frontend tasks — file tree, data flow |
-| [`frontend/build-pipeline.md`](./instructions/frontend/build-pipeline.md) | Build scripts, derivatives, atlas, recrop |
-| [`frontend/performance-and-budgets.md`](./instructions/frontend/performance-and-budgets.md) | FCP budgets, critical CSS, async loading |
-| [`frontend/authoring-and-runtime.md`](./instructions/frontend/authoring-and-runtime.md) | SCSS, fonts, images, runtime JS patterns |
-| [`frontend/local-development.md`](./instructions/frontend/local-development.md) | Apache config, local dev URL |
-| [`frontend/language-standards.md`](./instructions/frontend/language-standards.md) | Python offline-scripts, pipeline module pattern |
-| [`frontend/verification.md`](./instructions/frontend/verification.md) | Quality gates, Lighthouse, derivative validation |
+| [`static/architecture.md`](./instructions/static/architecture.md) | Always for static site tasks — file tree, data flow |
+| [`static/build-pipeline.md`](./instructions/static/build-pipeline.md) | Build scripts, derivatives, atlas, recrop |
+| [`static/performance-and-budgets.md`](./instructions/static/performance-and-budgets.md) | FCP budgets, critical CSS, async loading |
+| [`static/authoring-and-runtime.md`](./instructions/static/authoring-and-runtime.md) | SCSS, fonts, images, runtime JS patterns |
+| [`static/local-development.md`](./instructions/static/local-development.md) | Apache config, local dev URL |
+| [`static/language-standards.md`](./instructions/static/language-standards.md) | Python offline-scripts, pipeline module pattern |
+| [`static/verification.md`](./instructions/static/verification.md) | Quality gates, Lighthouse, derivative validation |
 | [`language-standards.md`](./instructions/language-standards.md) | TypeScript standards (shared) |
 
 ### Backend tasks
@@ -57,7 +58,7 @@ Goal: load only the minimum instruction files required for the current task to r
 
 ## Hard Invariants (Always Apply)
 
-- Deployable static artifact is `frontend/dist/`.
+- Deployable static artifact is `static/dist/`.
 - Keep first paint static-first; backend is never paint-critical.
 - Default builds should be fast; expensive recrop must be opt-in.
 - JS/TS functions should use arrow functions unless `this` binding requires `function`.
@@ -71,15 +72,19 @@ Goal: load only the minimum instruction files required for the current task to r
 - [`verification-and-agent-roe.md`](./instructions/verification-and-agent-roe.md)
 - [`available-tools.md`](./instructions/available-tools.md)
 
-### Frontend
+### Static Site
 
-- [`frontend/architecture.md`](./instructions/frontend/architecture.md)
-- [`frontend/performance-and-budgets.md`](./instructions/frontend/performance-and-budgets.md)
-- [`frontend/build-pipeline.md`](./instructions/frontend/build-pipeline.md)
-- [`frontend/authoring-and-runtime.md`](./instructions/frontend/authoring-and-runtime.md)
-- [`frontend/local-development.md`](./instructions/frontend/local-development.md)
-- [`frontend/language-standards.md`](./instructions/frontend/language-standards.md)
-- [`frontend/verification.md`](./instructions/frontend/verification.md)
+- [`static/architecture.md`](./instructions/static/architecture.md)
+- [`static/performance-and-budgets.md`](./instructions/static/performance-and-budgets.md)
+- [`static/build-pipeline.md`](./instructions/static/build-pipeline.md)
+- [`static/authoring-and-runtime.md`](./instructions/static/authoring-and-runtime.md)
+- [`static/local-development.md`](./instructions/static/local-development.md)
+- [`static/language-standards.md`](./instructions/static/language-standards.md)
+- [`static/verification.md`](./instructions/static/verification.md)
+
+### Dashboard
+
+- Dashboard instructions will be added as the SvelteKit dashboard is built out.
 
 ### Backend
 
