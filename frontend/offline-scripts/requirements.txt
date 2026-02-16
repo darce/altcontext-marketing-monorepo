@@ -1,7 +1,0 @@
-duckduckgo_search
-requests
-mediapipe
-opencv-python
-ruff
-mypy
-types-requests
