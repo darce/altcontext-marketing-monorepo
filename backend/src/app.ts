@@ -140,7 +140,8 @@ export const createApp = async (): Promise<FastifyInstance> => {
       "statusCode" in error &&
       typeof (error as Record<string, unknown>).statusCode === "number"
     ) {
-      const statusCode = (error as Record<string, unknown>).statusCode as number;
+      const statusCode = (error as Record<string, unknown>)
+        .statusCode as number;
       if (statusCode >= 400 && statusCode < 500) {
         return reply
           .status(statusCode)

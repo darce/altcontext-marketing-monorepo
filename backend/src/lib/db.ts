@@ -4,6 +4,12 @@ import pg from "pg";
 // `date` columns are not shifted by the server's local-time offset.
 pg.defaults.parseInputDatesAsUTC = true;
 
+// The `timestamp without time zone` columns (OID 1114) are stored without
+// timezone info.  By default the pg driver interprets them using the
+// process's local timezone.  Force UTC interpretation so that values
+// round-trip correctly regardless of the host machine's timezone.
+pg.types.setTypeParser(1114, (str: string) => new Date(str + "Z"));
+
 export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 
 export interface SqlQuery {

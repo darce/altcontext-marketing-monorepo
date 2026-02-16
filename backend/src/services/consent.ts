@@ -59,6 +59,14 @@ export const applyConsentStatus = async (
     }
   }
 
+  if (
+    existingStatus === ConsentStatus.withdrawn &&
+    nextStatus === ConsentStatus.pending
+  ) {
+    // [A1] Reject withdrawn -> pending transition
+    return;
+  }
+
   if (existingStatus !== nextStatus) {
     await query(
       tx,

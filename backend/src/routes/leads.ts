@@ -80,6 +80,9 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
       const result = await transaction((tx) =>
         unsubscribeLead(tx, body.email, requestContextFrom(request)),
       );
+      if (!result.found) {
+        return reply.code(404).send({ ok: false, error: "not_found" });
+      }
       return reply.code(200).send({ ok: true, ...result });
     },
   );
@@ -103,6 +106,9 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
       const result = await transaction((tx) =>
         deleteLeadByEmail(tx, body.email),
       );
+      if (!result.deleted) {
+        return reply.code(404).send({ ok: false, error: "not_found" });
+      }
       return reply.code(200).send({ ok: true, ...result });
     },
   );

@@ -14,11 +14,11 @@ import { query, sql } from "../lib/db.js";
 import { tableRef } from "../lib/sql.js";
 import type { LeadCaptureBody } from "../schemas/leads.js";
 import { applyConsentStatus, toConsentStatus } from "./consent.js";
+import { ingestEvent } from "./events.js";
 import { linkHeuristicVisitors, linkLeadToVisitor } from "./identity.js";
 import { ensureVisitorSession } from "./visitors.js";
 
 const LEADS_TABLE = tableRef("leads");
-const EVENTS_TABLE = tableRef("events");
 const FORM_SUBMISSIONS_TABLE = tableRef("form_submissions");
 
 // Mapper
@@ -110,36 +110,25 @@ export const captureLead = async (
   const lead = mapLead(leadRows[0]);
 
   // Create Event (form_submit)
-  const props = toJsonValue({
-    formName: body.formName,
-    sourceChannel: body.sourceChannel ?? null,
-  });
-
-  await query(
+  // [B2] call ingestEvent to ensure full enrichment (traffic source, device, dedupe, metrics)
+  await ingestEvent(
     tx,
-    sql`
-      INSERT INTO ${EVENTS_TABLE} (
-        "id",
-        "visitor_id",
-        "session_id",
-        "event_type",
-        "path",
-        "timestamp",
-        "ip_hash",
-        "ua_hash",
-        "props"
-      ) VALUES (
-        ${randomUUID()},
-        ${visitor.id},
-        ${session.id},
-        'form_submit',
-        ${body.path ?? "/"},
-        ${occurredAt},
-        ${context.ipHash},
-        ${context.uaHash},
-        ${props}
-      )
-    `,
+    {
+      anonId: body.anonId,
+      eventType: "form_submit",
+      path: body.path ?? "/",
+      referrer: body.referrer,
+      timestamp: occurredAt,
+      utm: body.utm,
+      traffic: {
+        isConversion: true,
+      },
+      props: {
+        formName: body.formName,
+        sourceChannel: body.sourceChannel ?? null,
+      },
+    },
+    context,
   );
 
   const [, heuristicLinksCreated] = await Promise.all([
@@ -154,7 +143,9 @@ export const captureLead = async (
   ]);
 
   // Create FormSubmission
+  // [B3] JSON.stringify props and add ::jsonb cast
   const payload = toJsonValue(body.payload);
+  const serializedPayload = payload ? JSON.stringify(payload) : null;
   await query(
     tx,
     sql`
@@ -176,7 +167,7 @@ export const captureLead = async (
         ${body.formName},
         ${occurredAt},
         ${ValidationStatus.accepted},
-        ${payload},
+        ${serializedPayload}::jsonb,
         NOW()
       )
     `,
