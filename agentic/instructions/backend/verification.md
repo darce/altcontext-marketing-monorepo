@@ -59,7 +59,7 @@ The following language-standard rules are enforced automatically by existing too
 
 ### Rules not yet enforced by tooling (require manual review)
 
-These rules from `language-standards.md` cannot be caught by the current toolchain and require human or agent review:
+These rules from `language-standards.md` and `code-review-checklist.md` cannot be caught by the current toolchain and require human or agent review:
 
 - Aggregate percentile correctness (semantic, not syntactic)
 - Metric column populated from real data vs. hardcoded stub
@@ -67,3 +67,7 @@ These rules from `language-standards.md` cannot be caught by the current toolcha
 - No blind casts on untrusted data
 - Shared schemas not duplicated (jscpd catches exact clones but not near-duplicates with different error messages)
 - Use write results inside transactions instead of re-reading
+- SQL composition type consistency: all fragment builders return `SqlQuery`, never bare strings (checklist #11)
+- JSONB bind values pre-stringified with `JSON.stringify()` (checklist #12)
+- Raw SQL column lists match current `schema.prisma` after migrations (checklist #13)
+- Test mocks use decoupled SQL pattern matching, not exact text (checklist #14)

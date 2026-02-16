@@ -9,7 +9,7 @@
 ## Hosting Model
 
 - Frontend deploys as static files from `frontend/dist/` (Apache-first).
-- Backend deploys to Fly.io as a containerised Node service from `backend/`.
+- Backend deploys to Fly.io or Oracle Cloud Infrastructure as a containerised Node service from `backend/`.
 - No build tool should assume Node/Python runtime is available on the static host.
 
 ## Monorepo Layout

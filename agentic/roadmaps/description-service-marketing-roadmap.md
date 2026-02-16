@@ -325,11 +325,11 @@ No additional CASL controls. Webhook events are system-to-system; no commercial 
 - [ ] Delete-by-email nullifies `leadId` on related `tenant_events`.
 - [ ] All new endpoints protected by `ADMIN_API_KEY`.
 - [ ] `make -C backend audit` passes with no new violations.
-- [ ] All new code follows `agentic/instructions/07-language-standards.md`.
+- [ ] All new code follows `agentic/instructions/language-standards.md`.
 
 ## References
 
 - Description service architecture: `/context-alt-text-monorepo/docs/agentic/diagrams/backend-uml/`
 - Marketing backend roadmap: `agentic/roadmaps/backend-marketing-server-roadmap.md`
-- Language standards: `agentic/instructions/07-language-standards.md`
+- Language standards: `agentic/instructions/language-standards.md`
 - Backend verification: `agentic/instructions/backend/verification.md`

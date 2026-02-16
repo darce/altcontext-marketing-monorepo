@@ -19,6 +19,7 @@
 - Extract shared types and schemas (e.g. UTM, pagination) into a dedicated module instead of duplicating across files.
 - Centralise cross-cutting error handling (validation errors, auth failures) in a single app-level handler rather than repeating identical `catch` blocks in every route.
 - Inside a database transaction, use the result of a prior write rather than re-reading the same row. Re-reads are redundant round-trips and create race windows under `READ COMMITTED` isolation.
+- SQL composition helpers (tagged templates, fragment builders, no-op defaults) must return a consistent type. If the `sql` tagged template expects `SqlQuery` objects (`{ text, values }`), every composable fragment must return `SqlQuery` — including empty/no-op cases. Returning a bare string where `SqlQuery` is expected causes the template to treat the string as a bind parameter, producing silent `$N` injection bugs.
 - Avoid serial `await` in loops when operations are independent. Batch with `Promise.all`, `createMany`, or similar to reduce round-trips.
 - Do not export symbols that have zero consumers. Dead exports increase surface area and confuse future readers. Remove them or make them module-private.
 - Do not duplicate utility functions across files. If a helper (e.g. a date parser) already exists in a shared module, import it instead of re-implementing it locally.

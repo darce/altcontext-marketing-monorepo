@@ -43,6 +43,7 @@ Goal: load only the minimum instruction files required for the current task to r
 |------|------|
 | [`backend/service-rules.md`](./instructions/backend/service-rules.md) | Always for backend tasks — API, Makefile, Fly.io, compliance |
 | [`backend/verification.md`](./instructions/backend/verification.md) | Quality gates, deploy checks |
+| [`backend/code-review-checklist.md`](./instructions/backend/code-review-checklist.md) | Pre-review protocol, recurring defect patterns |
 | [`available-tools.md`](./instructions/available-tools.md) | flyctl reference, Homebrew inventory |
 | [`language-standards.md`](./instructions/language-standards.md) | TypeScript standards (shared) |
 
@@ -84,3 +85,4 @@ Goal: load only the minimum instruction files required for the current task to r
 
 - [`backend/service-rules.md`](./instructions/backend/service-rules.md)
 - [`backend/verification.md`](./instructions/backend/verification.md)
+- [`backend/code-review-checklist.md`](./instructions/backend/code-review-checklist.md)
