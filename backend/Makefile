@@ -200,6 +200,97 @@ fly-pg-attach:  ## Attach a Fly Postgres cluster (sets DATABASE_URL)
 		fly postgres attach $$pg_app
 
 # ---------------------------------------------------------------------------
+# OCI deployment
+# ---------------------------------------------------------------------------
+.PHONY: oci-init oci-plan oci-apply oci-destroy oci-output oci-ssh oci-deploy oci-logs oci-health
+
+OCI_DIR := infra/oci
+OCI_INSTANCE_IP := $(shell cd $(OCI_DIR) && terraform output -raw instance_public_ip 2>/dev/null)
+
+oci-init:  ## Initialize Terraform for OCI deployment
+	@echo "== Initializing Terraform =="
+	@if [ ! -f $(OCI_DIR)/terraform.tfvars ]; then \
+		echo "Error: $(OCI_DIR)/terraform.tfvars not found"; \
+		echo "Copy terraform.tfvars.example and populate with your OCI credentials"; \
+		exit 1; \
+	fi
+	cd $(OCI_DIR) && terraform init
+
+oci-plan: oci-init  ## Preview Terraform changes
+	cd $(OCI_DIR) && terraform plan -var-file=terraform.tfvars
+
+oci-apply: oci-init  ## Create OCI infrastructure (VCN + VM)
+	cd $(OCI_DIR) && terraform apply -var-file=terraform.tfvars
+	@echo ""
+	@echo "== Infrastructure created! =="
+	@echo "Instance IP: $(shell cd $(OCI_DIR) && terraform output -raw instance_public_ip)"
+	@echo "SSH command: $(shell cd $(OCI_DIR) && terraform output -raw ssh_command)"
+	@echo ""
+	@echo "Next steps:"
+	@echo "  1. Wait ~3 minutes for cloud-init to complete"
+	@echo "  2. Check cloud-init status: make oci-ssh (then: tail -f /var/log/cloud-init-output.log)"
+	@echo "  3. Deploy code: make oci-deploy"
+
+oci-destroy:  ## Destroy OCI infrastructure (WARNING: deletes everything)
+	@read -p "Are you sure you want to destroy all OCI resources? [y/N] " confirm && \
+		[ "$$confirm" = "y" ] || exit 1
+	cd $(OCI_DIR) && terraform destroy -var-file=terraform.tfvars
+
+oci-output:  ## Show Terraform outputs (instance IP, SSH command, etc.)
+	cd $(OCI_DIR) && terraform output
+
+oci-ssh:  ## SSH into the OCI instance
+	@if [ -z "$(OCI_INSTANCE_IP)" ]; then \
+		echo "Error: Instance IP not found. Run 'make oci-apply' first"; \
+		exit 1; \
+	fi
+	ssh ubuntu@$(OCI_INSTANCE_IP)
+
+oci-deploy: check  ## Deploy code to OCI instance
+	@if [ -z "$(OCI_INSTANCE_IP)" ]; then \
+		echo "Error: Instance IP not found. Run 'make oci-apply' first"; \
+		exit 1; \
+	fi
+	@echo "== Deploying to $(OCI_INSTANCE_IP) =="
+	@echo "== Syncing code =="
+	rsync -avz --delete \
+		--exclude 'node_modules' \
+		--exclude 'dist' \
+		--exclude '.git' \
+		--exclude '.env*' \
+		--exclude 'secrets' \
+		--exclude 'logs' \
+		./ ubuntu@$(OCI_INSTANCE_IP):/opt/marketing-backend/
+	@echo ""
+	@echo "== Building Docker image =="
+	ssh ubuntu@$(OCI_INSTANCE_IP) "cd /opt/marketing-backend && docker compose -f docker-compose.oci.yml build"
+	@echo ""
+	@echo "== Running migrations =="
+	ssh ubuntu@$(OCI_INSTANCE_IP) "cd /opt/marketing-backend && docker compose -f docker-compose.oci.yml run --rm backend sh -c 'npx prisma migrate deploy'"
+	@echo ""
+	@echo "== Starting services =="
+	ssh ubuntu@$(OCI_INSTANCE_IP) "cd /opt/marketing-backend && docker compose -f docker-compose.oci.yml up -d"
+	@echo ""
+	@echo "== Deployment complete! =="
+	@echo "Health check: make oci-health"
+	@echo "View logs: make oci-logs"
+
+oci-logs:  ## Tail logs from OCI instance
+	@if [ -z "$(OCI_INSTANCE_IP)" ]; then \
+		echo "Error: Instance IP not found. Run 'make oci-apply' first"; \
+		exit 1; \
+	fi
+	ssh ubuntu@$(OCI_INSTANCE_IP) "cd /opt/marketing-backend && docker compose -f docker-compose.oci.yml logs -f"
+
+oci-health:  ## Check backend health on OCI instance
+	@if [ -z "$(OCI_INSTANCE_IP)" ]; then \
+		echo "Error: Instance IP not found. Run 'make oci-apply' first"; \
+		exit 1; \
+	fi
+	@echo "== Health check: http://$(OCI_INSTANCE_IP):3000/health =="
+	@curl -f http://$(OCI_INSTANCE_IP):3000/health && echo "" || (echo "Health check failed"; exit 1)
+
+# ---------------------------------------------------------------------------
 # Git / GitHub
 # ---------------------------------------------------------------------------
 .PHONY: pr

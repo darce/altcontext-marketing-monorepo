@@ -9,11 +9,6 @@ RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copy Prisma schema and generate client
-COPY prisma ./prisma
-COPY prisma.config.ts ./
-RUN DATABASE_URL="postgresql://dummy@localhost:5432/dummy" npx prisma generate
-
 # Copy source and compile TypeScript
 COPY tsconfig.json ./
 COPY src ./src
@@ -30,17 +25,11 @@ RUN apt-get update -y && apt-get install -y openssl && rm -rf /var/lib/apt/lists
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-# Copy Prisma schema + generated client from build stage
-COPY --from=build /app/prisma ./prisma
-COPY --from=build /app/prisma.config.ts ./
-COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=build /app/node_modules/@prisma ./node_modules/@prisma
-
 # Copy compiled JS
 COPY --from=build /app/dist ./dist
 
 ENV NODE_ENV=production
 EXPOSE 3000
 
-# Cap V8 heap at 384MB to leave room for OS + native allocations within 512MB VM
-CMD ["node", "--max-old-space-size=384", "dist/server.js"]
+# Cap V8 heap at 192MB to leave room for OS + native allocations within 256MB VM
+CMD ["node", "--max-old-space-size=192", "dist/server.js"]

@@ -1,0 +1,157 @@
+# Docker Compose configuration for OCI Always Free deployment
+# VM.Standard.A1.Flex: 6 GB RAM (1 OCPU, Ampere ARM)
+# Memory budget: ~5GB for containers (1GB reserved for OS/Docker daemon)
+#
+# Usage:
+#   docker compose -f docker-compose.oci.yml up -d
+#   docker compose -f docker-compose.oci.yml logs -f
+#   docker compose -f docker-compose.oci.yml down
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: marketing-db
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: altcontext_prod
+      POSTGRES_USER: altcontext
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+      # Tuned for 6GB VM (A1.Flex ARM)
+      # Allocate ~1.5GB for Postgres
+      POSTGRES_INITDB_ARGS: "-c shared_buffers=512MB -c effective_cache_size=1536MB"
+
+    command:
+      - postgres
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - effective_cache_size=1536MB
+      - -c
+      - maintenance_work_mem=128MB
+      - -c
+      - work_mem=8MB
+      - -c
+      - max_connections=100
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - wal_buffers=4MB
+      - -c
+      - min_wal_size=80MB
+      - -c
+      - max_wal_size=1GB
+      - -c
+      - checkpoint_completion_target=0.9
+      - -c
+      - log_statement=none
+      - -c
+      - log_duration=off
+      - -c
+      - log_connections=off
+      - -c
+      - log_disconnections=off
+
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./logs/postgres:/var/log/postgresql:rw
+
+    secrets:
+      - db_password
+
+    networks:
+      - backend
+
+    # Health check to ensure Postgres is ready before starting backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U altcontext -d altcontext_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    # Memory limit: 2GB (includes shared_buffers + OS overhead)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+
+    container_name: marketing-backend
+    restart: unless-stopped
+
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      LOG_LEVEL: info
+      DATABASE_URL: postgresql://altcontext:${DB_PASSWORD}@postgres:5432/altcontext_prod
+      IP_HASH_PEPPER_FILE: /run/secrets/ip_hash_pepper
+      ADMIN_API_KEY_FILE: /run/secrets/admin_api_key
+      # Load remaining config from .env.oci
+
+    env_file:
+      - .env.oci
+
+    secrets:
+      - db_password
+      - ip_hash_pepper
+      - admin_api_key
+
+    ports:
+      - "3000:3000"
+
+    networks:
+      - backend
+
+    volumes:
+      - ./logs/backend:/app/logs:rw
+
+    # Health check for backend service
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+    # Memory limit: 2GB (Node.js --max-old-space-size=1536 + overhead)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 1G
+
+networks:
+  backend:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  ip_hash_pepper:
+    file: ./secrets/ip_hash_pepper.txt
+  admin_api_key:
+    file: ./secrets/admin_api_key.txt

@@ -4,10 +4,10 @@ app = 'marketing-altcontext'
 primary_region = 'yyz'
 
 [build]
+dockerfile = "infra/fly/Dockerfile"
 
 [deploy]
-release_command = 'node --max-old-space-size=384 ./node_modules/prisma/build/index.js migrate deploy'
-release_command_timeout = '120s'
+
 
 [http_service]
 internal_port = 3000
