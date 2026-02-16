@@ -9,10 +9,13 @@ backend/.env.production
 __pycache__/
 
 # Local/source image corpus (keep local, do not version)
-frontend/input-images/
-frontend/offline-scripts/processed-images
-frontend/build/generated/
-frontend/public/unusable-images-report.json
+static/input-images/
+static/offline-scripts/processed-images/
+static/build/generated/
+static/public/unusable-images-report.json
+
+# Backup files
+*.bak
 
 # macOS Finder artifacts
 .DS_Store
