@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 
 import { env } from "../../src/config/env.js";
-import { prisma } from "../../src/lib/prisma.js";
+import { pool } from "../../src/lib/db.js";
+import { prisma } from "../helpers/prisma.js";
 import { rollupDateRange } from "../../src/services/metrics/rollups.js";
 import { closeDatabase, resetDatabase } from "../helpers/db.js";
 
@@ -140,6 +141,7 @@ beforeEach(async () => {
 
 after(async () => {
   await closeDatabase();
+  await pool.end();
 });
 
 test("rollupDateRange upserts daily rows idempotently", async () => {
@@ -153,7 +155,12 @@ test("rollupDateRange upserts daily rows idempotently", async () => {
     batchSize: 2,
   };
 
-  await rollupDateRange(prisma, range);
+  const client = await pool.connect();
+  try {
+    await rollupDateRange(client, range);
+  } finally {
+    client.release();
+  }
 
   const firstMetric = await prisma.dailyMetricRollup.findUnique({
     where: {
@@ -175,7 +182,12 @@ test("rollupDateRange upserts daily rows idempotently", async () => {
   });
   assert.equal(metricCountAfterFirstRun, 1);
 
-  await rollupDateRange(prisma, range);
+  const client2 = await pool.connect();
+  try {
+    await rollupDateRange(client2, range);
+  } finally {
+    client2.release();
+  }
 
   const metricCountAfterSecondRun = await prisma.dailyMetricRollup.count({
     where: { propertyId: PROPERTY_ID },
@@ -193,12 +205,17 @@ test("rollupDateRange recomputes updated values for an existing day", async () =
   const dayDate = new Date(`${day}T00:00:00.000Z`);
   await createBaseTraffic(day);
 
-  await rollupDateRange(prisma, {
-    from: dayDate,
-    to: dayDate,
-    propertyId: PROPERTY_ID,
-    batchSize: 1,
-  });
+  const client = await pool.connect();
+  try {
+    await rollupDateRange(client, {
+      from: dayDate,
+      to: dayDate,
+      propertyId: PROPERTY_ID,
+      batchSize: 1,
+    });
+  } finally {
+    client.release();
+  }
 
   const before = await prisma.dailyMetricRollup.findUnique({
     where: {
@@ -242,12 +259,17 @@ test("rollupDateRange recomputes updated values for an existing day", async () =
     },
   });
 
-  await rollupDateRange(prisma, {
-    from: dayDate,
-    to: dayDate,
-    propertyId: PROPERTY_ID,
-    batchSize: 1,
-  });
+  const client2 = await pool.connect();
+  try {
+    await rollupDateRange(client2, {
+      from: dayDate,
+      to: dayDate,
+      propertyId: PROPERTY_ID,
+      batchSize: 1,
+    });
+  } finally {
+    client2.release();
+  }
 
   const afterMetric = await prisma.dailyMetricRollup.findUnique({
     where: {
@@ -271,12 +293,18 @@ test("rollupDateRange handles multi-day windows deterministically", async () => 
   await createBaseTraffic("2026-01-22");
   await createBaseTraffic("2026-01-23");
 
-  const result = await rollupDateRange(prisma, {
-    from: new Date("2026-01-22T00:00:00.000Z"),
-    to: new Date("2026-01-23T00:00:00.000Z"),
-    propertyId: PROPERTY_ID,
-    batchSize: 2,
-  });
+  let result;
+  const client = await pool.connect();
+  try {
+    result = await rollupDateRange(client, {
+      from: new Date("2026-01-22T00:00:00.000Z"),
+      to: new Date("2026-01-23T00:00:00.000Z"),
+      propertyId: PROPERTY_ID,
+      batchSize: 2,
+    });
+  } finally {
+    client.release();
+  }
 
   assert.equal(result.dayCount, 2);
   assert.deepEqual(result.rolledUpDays, ["2026-01-22", "2026-01-23"]);
@@ -340,12 +368,17 @@ test("rollupDateRange respects UTC day boundaries", async () => {
   await createBoundaryEvent("anon-boundary-1", occurredAtOne, "/late");
   await createBoundaryEvent("anon-boundary-2", occurredAtTwo, "/early");
 
-  await rollupDateRange(prisma, {
-    from: new Date("2026-01-24T00:00:00.000Z"),
-    to: new Date("2026-01-25T00:00:00.000Z"),
-    propertyId: PROPERTY_ID,
-    batchSize: 2,
-  });
+  const client = await pool.connect();
+  try {
+    await rollupDateRange(client, {
+      from: new Date("2026-01-24T00:00:00.000Z"),
+      to: new Date("2026-01-25T00:00:00.000Z"),
+      propertyId: PROPERTY_ID,
+      batchSize: 2,
+    });
+  } finally {
+    client.release();
+  }
 
   const rows = await prisma.dailyMetricRollup.findMany({
     where: {

@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { ConsentStatus, type Prisma } from "@prisma/client";
+import type { PoolClient } from "pg";
+import { ConsentStatus } from "../../src/lib/schema-enums.js";
 
 import {
   applyConsentStatus,
@@ -17,22 +18,26 @@ test("toConsentStatus maps explicit values and defaults to pending", () => {
 });
 
 test("applyConsentStatus updates lead status when changed and writes audit event", async () => {
-  let updateCalls = 0;
-  let createdEvents = 0;
+  let queries: any[] = [];
 
   const tx = {
-    lead: {
-      findUnique: async () => ({ consentStatus: ConsentStatus.pending }),
-      update: async () => {
-        updateCalls += 1;
-      },
+    query: async (text: string, values: any[]) => {
+      queries.push({ text, values });
+      // lead find:
+      if (text.includes('SELECT "consent_status"')) {
+        return { rows: [{ consent_status: ConsentStatus.pending }] };
+      }
+      // lead update:
+      if (text.includes("UPDATE") && text.includes('"leads"')) {
+        return { rows: [{ id: "lead-1" }] };
+      }
+      // audit create:
+      if (text.includes("INSERT INTO") && text.includes('"consent_events"')) {
+        return { rows: [{ id: "event-1" }] };
+      }
+      return { rows: [] };
     },
-    consentEvent: {
-      create: async () => {
-        createdEvents += 1;
-      },
-    },
-  } as unknown as Prisma.TransactionClient;
+  } as unknown as PoolClient;
 
   await applyConsentStatus(
     tx,
@@ -42,27 +47,33 @@ test("applyConsentStatus updates lead status when changed and writes audit event
     "ip-hash",
   );
 
-  assert.equal(updateCalls, 1);
-  assert.equal(createdEvents, 1);
+  assert.equal(queries.length, 3);
+  const updateQuery = queries.find(
+    (q) => q.text.includes("UPDATE") && q.text.includes('"leads"'),
+  );
+  const insertQuery = queries.find(
+    (q) =>
+      q.text.includes("INSERT INTO") && q.text.includes('"consent_events"'),
+  );
+  assert.ok(updateQuery);
+  assert.ok(insertQuery);
 });
 
 test("applyConsentStatus does not update lead when status is unchanged", async () => {
-  let updateCalls = 0;
-  let createdEvents = 0;
+  let queries: any[] = [];
 
   const tx = {
-    lead: {
-      findUnique: async () => ({ consentStatus: ConsentStatus.withdrawn }),
-      update: async () => {
-        updateCalls += 1;
-      },
+    query: async (text: string, values: any[]) => {
+      queries.push({ text, values });
+      if (text.includes('SELECT "consent_status"')) {
+        return { rows: [{ consent_status: ConsentStatus.withdrawn }] };
+      }
+      if (text.includes('INSERT INTO "consent_events"')) {
+        return { rows: [{ id: "event-1" }] };
+      }
+      return { rows: [] };
     },
-    consentEvent: {
-      create: async () => {
-        createdEvents += 1;
-      },
-    },
-  } as unknown as Prisma.TransactionClient;
+  } as unknown as PoolClient;
 
   await applyConsentStatus(
     tx,
@@ -72,26 +83,29 @@ test("applyConsentStatus does not update lead when status is unchanged", async (
     "ip-hash",
   );
 
-  assert.equal(updateCalls, 0);
-  assert.equal(createdEvents, 1);
+  const updateQuery = queries.find(
+    (q) => q.text.includes("UPDATE") && q.text.includes('"leads"'),
+  );
+  const insertQuery = queries.find(
+    (q) =>
+      q.text.includes("INSERT INTO") && q.text.includes('"consent_events"'),
+  );
+  assert.equal(updateQuery, undefined);
+  assert.ok(insertQuery);
 });
 
 test("applyConsentStatus no-ops when lead does not exist", async () => {
-  let createdEvents = 0;
+  let queries: any[] = [];
 
   const tx = {
-    lead: {
-      findUnique: async () => null,
-      update: async () => {
-        throw new Error("unexpected update call");
-      },
+    query: async (text: string, values: any[]) => {
+      queries.push({ text, values });
+      if (text.includes('SELECT "consent_status"')) {
+        return { rows: [] }; // no lead
+      }
+      return { rows: [] };
     },
-    consentEvent: {
-      create: async () => {
-        createdEvents += 1;
-      },
-    },
-  } as unknown as Prisma.TransactionClient;
+  } as unknown as PoolClient;
 
   await applyConsentStatus(
     tx,
@@ -100,5 +114,8 @@ test("applyConsentStatus no-ops when lead does not exist", async () => {
     "unknown",
   );
 
-  assert.equal(createdEvents, 0);
+  const insertQuery = queries.find((q) =>
+    q.text.includes('INSERT INTO "consent_events"'),
+  );
+  assert.equal(insertQuery, undefined);
 });

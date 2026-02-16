@@ -1,4 +1,4 @@
-import { prisma } from "../../src/lib/prisma.js";
+import { prisma } from "./prisma.js";
 
 export const resetDatabase = async (): Promise<void> => {
   await prisma.dailyIngestRollup.deleteMany();

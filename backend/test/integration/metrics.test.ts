@@ -6,7 +6,7 @@ import type { FastifyInstance } from "fastify";
 
 import { createApp } from "../../src/app.js";
 import { env } from "../../src/config/env.js";
-import { prisma } from "../../src/lib/prisma.js";
+import { prisma } from "../helpers/prisma.js";
 import { closeDatabase, resetDatabase } from "../helpers/db.js";
 
 const TEST_ADMIN_KEY = "0123456789abcdef01234567";

@@ -3,7 +3,7 @@ import { after, before, beforeEach, test } from "node:test";
 
 import { LinkSource, Prisma } from "@prisma/client";
 
-import { prisma } from "../../src/lib/prisma.js";
+import { prisma } from "../helpers/prisma.js";
 import { closeDatabase, resetDatabase } from "../helpers/db.js";
 
 before(async () => {
