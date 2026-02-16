@@ -5,7 +5,7 @@ Infrastructure configuration for deploying the marketing backend to [Fly.io](htt
 ## Architecture
 
 - **Compute**: `shared-cpu-1x`, 256 MB RAM (Fly Machines)
-- **Database**: Fly Postgres (managed)
+- **Database**: Fly Postgres (unmanaged legacy cluster)
 - **Region**: `yyz` (Toronto)
 - **Health checks**: `/v1/healthz` every 30s
 
@@ -13,10 +13,10 @@ Infrastructure configuration for deploying the marketing backend to [Fly.io](htt
 
 | File                   | Purpose                                                             |
 | ---------------------- | ------------------------------------------------------------------- |
-| `backend/fly.toml`     | Fly app configuration — VM size, regions, health checks, build path |
-| `infra/fly/Dockerfile` | Multi-stage build: compile TS → production image (node:22-slim)     |
+| `fly.toml` (monorepo root) | Fly app configuration — VM size, regions, health checks, build path |
+| `backend/infra/fly/Dockerfile` | Multi-stage build: compile TS → production image (node:22-slim)     |
 
-> `fly.toml` lives at the backend root so flyctl auto-discovers it. The Dockerfile stays in `infra/fly/` and is referenced via `[build] dockerfile`.
+> `fly.toml` lives at the **monorepo root** (Docker build context). Run `fly deploy` from the monorepo root. The Dockerfile stays in `backend/infra/fly/` and is referenced via `[build] dockerfile`.
 
 ## Prerequisites
 
@@ -60,7 +60,7 @@ make -C backend fly-pg-attach     # attach a Fly Postgres cluster
 ```
 make fly-deploy
   ├── make check (typecheck + lint + format)
-  ├── fly deploy (reads backend/fly.toml)
+  ├── fly deploy (reads fly.toml from monorepo root)
   │   ├── Docker build (multi-stage, infra/fly/Dockerfile)
   │   │   ├── Stage 1: npm ci → tsc build
   │   │   └── Stage 2: npm ci --omit=dev → copy dist/
@@ -104,7 +104,7 @@ Secrets are **staged** (not applied immediately). Run `make fly-deploy` to apply
 
 **Symptom**: Machine restarts repeatedly, logs show `SIGKILL`.
 
-**Check**: `fly logs --config infra/fly/fly.toml` — look for "out of memory".
+**Check**: `fly logs` — look for "out of memory".
 
 **Solution**: Check for memory leaks in route handlers or `pg` pool exhaustion. Heap is capped at 192 MB — if needed, increase to `memory = '512mb'` in `fly.toml` temporarily for diagnosis.
 
@@ -120,7 +120,7 @@ Secrets are **staged** (not applied immediately). Run `make fly-deploy` to apply
 
 **Symptom**: Machine starts but health checks fail.
 
-**Check**: `fly checks list --config infra/fly/fly.toml` and `fly logs`.
+**Check**: `fly checks list` and `fly logs`.
 
 **Solution**: Verify the app responds on `/v1/healthz` port 3000. Increase `grace_period` in `fly.toml` if cold start is slow.
 

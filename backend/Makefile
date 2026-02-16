@@ -162,7 +162,7 @@ stop: db-stop  ## Stop local Postgres (server stopped via Ctrl-C)
 # ---------------------------------------------------------------------------
 # Fly.io deployment
 # ---------------------------------------------------------------------------
-# fly.toml lives at backend/fly.toml — flyctl auto-discovers it from cwd.
+# fly.toml lives at monorepo root — run `fly deploy` from there, or `make fly-deploy` from backend/.
 
 .PHONY: fly-launch fly-deploy fly-deploy-only fly-secrets fly-logs fly-ssh fly-status fly-checks fly-pg-attach
 
@@ -170,13 +170,13 @@ fly-launch:  ## First-time Fly app scaffold
 	fly launch
 
 fly-deploy: check  ## Full deploy: quality gates → build → push → verify
-	fly deploy
+	cd .. && fly deploy
 	@echo "== Waiting for health check =="
 	@sleep 5
 	fly checks list
 
 fly-deploy-only:  ## Deploy without running quality gates first
-	fly deploy
+	cd .. && fly deploy
 
 fly-secrets:  ## Import .env.production into Fly secrets (staged, no restart)
 	@if [ ! -f .env.production ]; then \

@@ -27,7 +27,7 @@ fly checks list                     # health check state
 
 #### Patterns (Do)
 
-- Run `fly launch` from `backend/infra/fly/` — keeps `fly.toml` co-located with the Dockerfile. Use `--config infra/fly/fly.toml` when running other fly commands from `backend/`.
+- Run `fly deploy` from the **monorepo root** where `fly.toml` lives (Docker build context). The Dockerfile is at `backend/infra/fly/Dockerfile` and referenced via `[build] dockerfile`.
 - Use `fly secrets set` for all credentials; never commit `.env` with real values.
 - Use `fly secrets import < .env --stage` to batch secrets without triggering a restart.
 - Run migrations externally via `fly proxy` + `npx prisma migrate deploy` from a dev machine — Prisma is a dev-only tool excluded from the production image (`npm ci --omit=dev`).
