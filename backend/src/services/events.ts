@@ -1,8 +1,8 @@
 import { createHash, randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
 
-import { DeviceType, TrafficSource } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
-
+import { DeviceType, TrafficSource } from "../lib/schema-enums.js";
+import { query, sql } from "../lib/db.js";
 import { tableRef, typeRef } from "../lib/sql.js";
 import type { EventBody } from "../schemas/events.js";
 import { ensureVisitorSession } from "./visitors.js";
@@ -12,12 +12,6 @@ export interface EventIngestResult {
   eventId: string;
   visitorId: string;
   sessionId: string;
-}
-
-interface EventRecord {
-  id: string;
-  visitorId: string;
-  sessionId: string | null;
 }
 
 const EVENTS_TABLE = tableRef("events");
@@ -214,7 +208,7 @@ const resolveDeviceType = (
 };
 
 export const ingestEvent = async (
-  tx: Prisma.TransactionClient,
+  tx: PoolClient,
   body: EventBody,
   context: RequestContext,
 ): Promise<EventIngestResult> => {
@@ -279,39 +273,54 @@ export const ingestEvent = async (
   const isConversion =
     body.traffic?.isConversion ?? body.eventType === "form_submit";
 
-  const insertedRows = await tx.$queryRaw<Array<EventRecord>>`
-    INSERT INTO ${EVENTS_TABLE} (
-      "id", "visitor_id", "session_id", "dedupe_key",
-      "event_type", "path", "timestamp",
-      "ip_hash", "ua_hash", "props",
-      "property_id", "traffic_source", "device_type",
-      "country_code", "is_entrance", "is_exit", "is_conversion"
-    )
-    VALUES (
-      ${eventId}, ${visitor.id}, ${session.id}, ${dedupeKey},
-      ${body.eventType}, ${body.path}, ${occurredAt},
-      ${context.ipHash}, ${context.uaHash}, ${serializedProps}::jsonb,
-      ${propertyId}, ${trafficSource}::${TRAFFIC_SOURCE_TYPE}, ${deviceType}::${DEVICE_TYPE_TYPE},
-      ${countryCode}, ${isEntrance}, ${isExit}, ${isConversion}
-    )
-    ON CONFLICT ("dedupe_key") DO NOTHING
-    RETURNING "id", "visitor_id" AS "visitorId", "session_id" AS "sessionId"
-  `;
+  const { rows } = await query<{
+    id: string;
+    visitorId: string;
+    sessionId: string;
+  }>(
+    tx,
+    sql`
+      INSERT INTO ${EVENTS_TABLE} (
+        "id", "visitor_id", "session_id", "dedupe_key",
+        "event_type", "path", "timestamp",
+        "ip_hash", "ua_hash", "props",
+        "property_id", "traffic_source", "device_type",
+        "country_code", "is_entrance", "is_exit", "is_conversion"
+      )
+      VALUES (
+        ${eventId}, ${visitor.id}, ${session.id}, ${dedupeKey},
+        ${body.eventType}, ${body.path}, ${occurredAt},
+        ${context.ipHash}, ${context.uaHash}, ${serializedProps}::jsonb,
+        ${propertyId}, ${trafficSource}::${TRAFFIC_SOURCE_TYPE}, ${deviceType}::${DEVICE_TYPE_TYPE},
+        ${countryCode}, ${isEntrance}, ${isExit}, ${isConversion}
+      )
+      ON CONFLICT ("dedupe_key") DO NOTHING
+      RETURNING "id", "visitor_id" AS "visitorId", "session_id" AS "sessionId"
+    `,
+  );
 
-  let event = insertedRows[0];
+  let event = rows[0];
   if (!event) {
-    const existing = await tx.event.findUnique({
-      where: { dedupeKey },
-      select: {
-        id: true,
-        visitorId: true,
-        sessionId: true,
-      },
-    });
-    if (!existing) {
+    const { rows: existingRows } = await query<{
+      id: string;
+      visitorId: string;
+      sessionId: string;
+    }>(
+      tx,
+      sql`
+        SELECT "id", "visitor_id" AS "visitorId", "session_id" AS "sessionId"
+        FROM ${EVENTS_TABLE}
+        WHERE "dedupe_key" = ${dedupeKey}
+      `,
+    );
+    if (existingRows.length === 0) {
       throw new Error("event_dedupe_lookup_failed");
     }
-    event = existing;
+    event = existingRows[0];
+  }
+
+  if (!event) {
+    throw new Error("event_dedupe_lookup_failed");
   }
 
   return {

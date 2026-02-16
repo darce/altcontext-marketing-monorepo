@@ -1,11 +1,13 @@
-import { prisma } from "../lib/prisma.js";
+import { pool, transaction } from "../lib/db.js";
 import {
   isMaterializedViewMissingError,
   refreshMetricsMaterializedView,
 } from "../services/metrics/materialized-view.js";
 
 const run = async (): Promise<void> => {
-  await refreshMetricsMaterializedView(prisma);
+  await transaction(async (tx) => {
+    await refreshMetricsMaterializedView(tx);
+  });
   console.log("✅ Materialized view refreshed.");
 };
 
@@ -23,5 +25,5 @@ void run()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await pool.end();
   });

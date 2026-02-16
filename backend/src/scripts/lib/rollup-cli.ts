@@ -1,3 +1,10 @@
+import { env } from "../../config/env.js";
+import {
+  addUtcDays,
+  parseIsoDay,
+  startOfUtcDay,
+} from "../../schemas/metrics.js";
+
 export interface RollupCliArgs {
   from?: string;
   to?: string;
@@ -36,4 +43,25 @@ export const parseRollupCliArgs = (argv: string[]): RollupCliArgs => {
   }
 
   return args;
+};
+
+export interface RollupConfig {
+  from: Date;
+  to: Date;
+  propertyId: string;
+}
+
+export const getRollupConfig = (args: RollupCliArgs): RollupConfig => {
+  const today = startOfUtcDay(new Date());
+  const defaultFrom = addUtcDays(today, -(env.ROLLUP_BATCH_DAYS - 1));
+
+  const from = args.from ? parseIsoDay(args.from) : defaultFrom;
+  const to = args.to ? parseIsoDay(args.to) : today;
+  const propertyId = args.propertyId ?? env.ROLLUP_DEFAULT_PROPERTY_ID;
+
+  if (from.getTime() > to.getTime()) {
+    throw new Error("--from must be before or equal to --to");
+  }
+
+  return { from, to, propertyId };
 };

@@ -1,11 +1,11 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
+import type { PoolClient } from "pg";
 
 import { env } from "../../config/env.js";
 import {
   EVENT_INGEST_ENDPOINT,
   LEAD_INGEST_ENDPOINT,
 } from "../../lib/ingest-rejections.js";
-import { toPrismaJson } from "../../lib/json.js";
+import { toJsonValue } from "../../lib/json.js";
 import { toBigInt, toInteger } from "../../lib/coerce.js";
 import { tableRef } from "../../lib/sql.js";
 import {
@@ -13,6 +13,7 @@ import {
   formatIsoDay,
   startOfUtcDay,
 } from "../../schemas/metrics.js";
+import { emptySql, query, sql, type SqlQuery } from "../../lib/db.js";
 
 export interface RollupDateRangeInput {
   from: Date;
@@ -85,13 +86,17 @@ const LEADS_TABLE = tableRef("leads");
 const LEAD_IDENTITIES_TABLE = tableRef("lead_identities");
 const FORM_SUBMISSIONS_TABLE = tableRef("form_submissions");
 const INGEST_REJECTIONS_TABLE = tableRef("ingest_rejections");
+const METRICS_ROLLUP_TABLE = tableRef("daily_metric_rollups");
+const INGEST_ROLLUP_TABLE = tableRef("daily_ingest_rollups");
 
-const toRequiredJson = (value: unknown): Prisma.InputJsonValue => {
-  const parsed = toPrismaJson(value);
+const toRequiredJson = (value: unknown): string => {
+  const parsed = toJsonValue(value);
   if (parsed === undefined) {
     throw new TypeError("expected JSON value");
   }
-  return parsed;
+  // Pre-stringify so the pg driver sends a JSON string rather than
+  // attempting PostgreSQL array serialisation for JS arrays.
+  return JSON.stringify(parsed);
 };
 
 const buildDays = (from: Date, to: Date): Date[] => {
@@ -111,20 +116,20 @@ const buildDays = (from: Date, to: Date): Date[] => {
 };
 
 const computeDailyMetrics = async (
-  prisma: PrismaClient,
+  tx: PoolClient,
   dayStart: Date,
   propertyId: string,
 ): Promise<void> => {
   const dayEnd = addUtcDays(dayStart, 1);
   const isDefaultProperty = propertyId === env.ROLLUP_DEFAULT_PROPERTY_ID;
 
-  const eventPropertyFilter = isDefaultProperty
-    ? Prisma.empty
-    : Prisma.sql`AND e."property_id" = ${propertyId}`;
+  const eventPropertyFilter: SqlQuery = isDefaultProperty
+    ? emptySql()
+    : sql`AND e."property_id" = ${propertyId}`;
 
-  const leadPropertyFilter = isDefaultProperty
-    ? Prisma.empty
-    : Prisma.sql`
+  const leadPropertyFilter: SqlQuery = isDefaultProperty
+    ? emptySql()
+    : sql`
         AND EXISTS (
           SELECT 1
           FROM ${LEAD_IDENTITIES_TABLE} li
@@ -135,9 +140,9 @@ const computeDailyMetrics = async (
         )
       `;
 
-  const leadVisitorPropertyFilter = isDefaultProperty
-    ? Prisma.empty
-    : Prisma.sql`
+  const leadVisitorPropertyFilter: SqlQuery = isDefaultProperty
+    ? emptySql()
+    : sql`
         AND EXISTS (
           SELECT 1
           FROM ${EVENTS_TABLE} ev
@@ -147,9 +152,9 @@ const computeDailyMetrics = async (
         )
       `;
 
-  const submissionPropertyFilter = isDefaultProperty
-    ? Prisma.empty
-    : Prisma.sql`
+  const submissionPropertyFilter: SqlQuery = isDefaultProperty
+    ? emptySql()
+    : sql`
         AND EXISTS (
           SELECT 1
           FROM ${EVENTS_TABLE} ev
@@ -159,9 +164,17 @@ const computeDailyMetrics = async (
         )
       `;
 
-  const [trafficRows, formRows, leadRows, timeRows, sourceRows, landingRows] =
-    await Promise.all([
-      prisma.$queryRaw<Array<TrafficTotalsRow>>`
+  const [
+    { rows: trafficRows },
+    { rows: formRows },
+    { rows: leadRows },
+    { rows: timeRows },
+    { rows: sourceRows },
+    { rows: landingRows },
+  ] = await Promise.all([
+    query<TrafficTotalsRow>(
+      tx,
+      sql`
         SELECT
           COUNT(DISTINCT e."visitor_id")::int AS unique_visitors,
           COUNT(DISTINCT e."visitor_id") FILTER (WHERE v."first_seen_at" < ${dayStart})::int AS returning_visitors,
@@ -171,11 +184,14 @@ const computeDailyMetrics = async (
           COUNT(*) FILTER (WHERE e."is_conversion")::int AS total_conversions
         FROM ${EVENTS_TABLE} e
         INNER JOIN ${VISITORS_TABLE} v ON v."id" = e."visitor_id"
-        WHERE e."property_id" = ${propertyId}
-          AND e."timestamp" >= ${dayStart}
+        WHERE e."timestamp" >= ${dayStart}
           AND e."timestamp" < ${dayEnd}
+          ${eventPropertyFilter}
       `,
-      prisma.$queryRaw<Array<FormMetricsRow>>`
+    ),
+    query<FormMetricsRow>(
+      tx,
+      sql`
         SELECT
           COUNT(*) FILTER (WHERE e."event_type" = 'form_start')::int AS form_starts,
           COUNT(*) FILTER (WHERE e."event_type" = 'form_submit')::int AS form_submits
@@ -184,14 +200,20 @@ const computeDailyMetrics = async (
           AND e."timestamp" < ${dayEnd}
           ${eventPropertyFilter}
       `,
-      prisma.$queryRaw<Array<NewLeadsRow>>`
+    ),
+    query<NewLeadsRow>(
+      tx,
+      sql`
         SELECT COUNT(*)::int AS new_leads
         FROM ${LEADS_TABLE} l
         WHERE l."first_captured_at" >= ${dayStart}
           AND l."first_captured_at" < ${dayEnd}
           ${leadPropertyFilter}
       `,
-      prisma.$queryRaw<Array<TimeToCaptureRow>>`
+    ),
+    query<TimeToCaptureRow>(
+      tx,
+      sql`
         WITH lead_capture AS (
           SELECT
             l."id" AS lead_id,
@@ -221,42 +243,58 @@ const computeDailyMetrics = async (
         FROM lead_capture
         WHERE first_seen_at IS NOT NULL
       `,
-      prisma.$queryRaw<Array<TrafficSourceRow>>`
+    ),
+    query<TrafficSourceRow>(
+      tx,
+      sql`
         SELECT
           e."traffic_source"::text AS source,
           COUNT(*)::int AS count
         FROM ${EVENTS_TABLE} e
-        WHERE e."property_id" = ${propertyId}
-          AND e."timestamp" >= ${dayStart}
+        WHERE e."timestamp" >= ${dayStart}
           AND e."timestamp" < ${dayEnd}
+          ${eventPropertyFilter}
         GROUP BY e."traffic_source"
       `,
-      prisma.$queryRaw<Array<LandingPathRow>>`
-        SELECT
+    ),
+    query<LandingPathRow>(
+      tx,
+      sql`
+         SELECT
           e."path" AS path,
           COUNT(*)::int AS entrances,
           COUNT(*) FILTER (WHERE e."is_conversion")::int AS conversions
         FROM ${EVENTS_TABLE} e
-        WHERE e."property_id" = ${propertyId}
-          AND e."timestamp" >= ${dayStart}
+        WHERE e."timestamp" >= ${dayStart}
           AND e."timestamp" < ${dayEnd}
           AND e."is_entrance" = true
+          ${eventPropertyFilter}
         GROUP BY e."path"
         ORDER BY entrances DESC, conversions DESC, e."path" ASC
         LIMIT 10
       `,
-    ]);
+    ),
+  ]);
 
-  const [eventRows, leadIngestRows, ingestLatencyRows, ingestRejectionRows] =
-    await Promise.all([
-      prisma.$queryRaw<Array<IngestEventsRow>>`
+  const [
+    { rows: eventRows },
+    { rows: leadIngestRows },
+    { rows: ingestLatencyRows },
+    { rows: ingestRejectionRows },
+  ] = await Promise.all([
+    query<IngestEventsRow>(
+      tx,
+      sql`
       SELECT COUNT(*)::int AS events_accepted
       FROM ${EVENTS_TABLE} e
       WHERE e."timestamp" >= ${dayStart}
         AND e."timestamp" < ${dayEnd}
         ${eventPropertyFilter}
     `,
-      prisma.$queryRaw<Array<IngestLeadsRow>>`
+    ),
+    query<IngestLeadsRow>(
+      tx,
+      sql`
       SELECT
         COUNT(*) FILTER (WHERE fs."validation_status" = 'accepted')::int AS leads_accepted,
         COUNT(*) FILTER (WHERE fs."validation_status" <> 'accepted')::int AS leads_rejected
@@ -265,27 +303,34 @@ const computeDailyMetrics = async (
         AND fs."submitted_at" < ${dayEnd}
         ${submissionPropertyFilter}
     `,
-      prisma.$queryRaw<Array<IngestLatencyRow>>`
+    ),
+    query<IngestLatencyRow>(
+      tx,
+      sql`
         SELECT
           ROUND(PERCENTILE_CONT(0.95) WITHIN GROUP (
             ORDER BY (e."props"->>'ttfbMs')::int
           ))::int AS p95_ttfb_ms
         FROM ${EVENTS_TABLE} e
-        WHERE e."property_id" = ${propertyId}
-          AND e."timestamp" >= ${dayStart}
+        WHERE e."timestamp" >= ${dayStart}
           AND e."timestamp" < ${dayEnd}
           AND e."props"->>'ttfbMs' IS NOT NULL
+          ${eventPropertyFilter}
       `,
-      prisma.$queryRaw<Array<IngestRejectionsRow>>`
+    ),
+    query<IngestRejectionsRow>(
+      tx,
+      sql`
         SELECT
           COUNT(*) FILTER (WHERE r."endpoint" = ${EVENT_INGEST_ENDPOINT})::int AS events_rejected,
           COUNT(*) FILTER (WHERE r."endpoint" = ${LEAD_INGEST_ENDPOINT})::int AS leads_rejected
         FROM ${INGEST_REJECTIONS_TABLE} r
-        WHERE r."property_id" = ${propertyId}
-          AND r."occurred_at" >= ${dayStart}
+        WHERE r."occurred_at" >= ${dayStart}
           AND r."occurred_at" < ${dayEnd}
+          ${env.ROLLUP_DEFAULT_PROPERTY_ID ? sql`AND r."property_id" = ${propertyId}` : emptySql()} 
       `,
-    ]);
+    ),
+  ]);
 
   const trafficRow = trafficRows[0];
   const formRow = formRows[0];
@@ -316,77 +361,128 @@ const computeDailyMetrics = async (
     toInteger(leadIngestRow?.leads_rejected) +
     toInteger(ingestRejectionRow?.leads_rejected);
 
-  const metricRollupValues = {
-    uniqueVisitors: toInteger(trafficRow?.unique_visitors),
-    returningVisitors: toInteger(trafficRow?.returning_visitors),
-    totalPageViews: toInteger(trafficRow?.total_page_views),
-    totalEntrances: toInteger(trafficRow?.total_entrances),
-    totalExits: toInteger(trafficRow?.total_exits),
-    totalConversions: toInteger(trafficRow?.total_conversions),
-    formStarts: toInteger(formRow?.form_starts),
-    formSubmits: toInteger(formRow?.form_submits),
-    newLeads: toInteger(leadRow?.new_leads),
-    timeToFirstCaptureSumMs: toBigInt(timeRow?.sum_ms),
-    timeToFirstCaptureCount: toInteger(timeRow?.count),
-    trafficSourceBreakdown: toRequiredJson(trafficSourceBreakdown),
-    topLandingPaths: toRequiredJson(topLandingPaths),
-  };
+  const uniqueVisitors = toInteger(trafficRow?.unique_visitors);
+  const returningVisitors = toInteger(trafficRow?.returning_visitors);
+  const totalPageViews = toInteger(trafficRow?.total_page_views);
+  const totalEntrances = toInteger(trafficRow?.total_entrances);
+  const totalExits = toInteger(trafficRow?.total_exits);
+  const totalConversions = toInteger(trafficRow?.total_conversions);
+  const formStarts = toInteger(formRow?.form_starts);
+  const formSubmits = toInteger(formRow?.form_submits);
+  const newLeads = toInteger(leadRow?.new_leads);
+  const timeToFirstCaptureSumMs = toBigInt(timeRow?.sum_ms);
+  const timeToFirstCaptureCount = toInteger(timeRow?.count);
+  const trafficSourceBreakdownJson = toRequiredJson(trafficSourceBreakdown);
+  const topLandingPathsJson = toRequiredJson(topLandingPaths);
 
-  const ingestRollupValues = {
-    eventsAccepted: toInteger(eventRow?.events_accepted),
-    eventsRejected,
-    leadsAccepted: toInteger(leadIngestRow?.leads_accepted),
-    leadsRejected,
-    p95TtfbMs:
-      ingestLatencyRow?.p95_ttfb_ms === null
-        ? null
-        : toInteger(ingestLatencyRow?.p95_ttfb_ms),
-    errorBreakdown: toRequiredJson({
-      eventsRejected,
-      leadsRejected,
-    }),
-  };
+  const eventsAccepted = toInteger(eventRow?.events_accepted);
+  const leadsAccepted = toInteger(leadIngestRow?.leads_accepted);
+  const p95TtfbMs =
+    ingestLatencyRow?.p95_ttfb_ms === null
+      ? null
+      : toInteger(ingestLatencyRow?.p95_ttfb_ms);
+  const errorBreakdownJson = toRequiredJson({ eventsRejected, leadsRejected });
 
-  await Promise.all([
-    prisma.dailyMetricRollup.upsert({
-      where: {
-        propertyId_day: {
-          propertyId,
-          day: dayStart,
-        },
-      },
-      update: {
-        ...metricRollupValues,
-        generatedAt: new Date(),
-      },
-      create: {
-        propertyId,
-        day: dayStart,
-        ...metricRollupValues,
-      },
-    }),
-    prisma.dailyIngestRollup.upsert({
-      where: {
-        propertyId_day: {
-          propertyId,
-          day: dayStart,
-        },
-      },
-      update: {
-        ...ingestRollupValues,
-        generatedAt: new Date(),
-      },
-      create: {
-        propertyId,
-        day: dayStart,
-        ...ingestRollupValues,
-      },
-    }),
-  ]);
+  const metricsInsertSql = sql`
+        INSERT INTO ${METRICS_ROLLUP_TABLE} (
+          "id",
+          "property_id",
+          "day",
+          "unique_visitors",
+          "returning_visitors",
+          "total_page_views",
+          "total_entrances",
+          "total_exits",
+          "total_conversions",
+          "form_starts",
+          "form_submits",
+          "new_leads",
+          "time_to_first_capture_sum_ms",
+          "time_to_first_capture_count",
+          "traffic_source_breakdown",
+          "top_landing_paths",
+          "generated_at",
+          "updated_at"
+        ) VALUES (
+          ${crypto.randomUUID()},
+          ${propertyId},
+          ${dayStart},
+          ${uniqueVisitors},
+          ${returningVisitors},
+          ${totalPageViews},
+          ${totalEntrances},
+          ${totalExits},
+          ${totalConversions},
+          ${formStarts},
+          ${formSubmits},
+          ${newLeads},
+          ${timeToFirstCaptureSumMs},
+          ${timeToFirstCaptureCount},
+          ${trafficSourceBreakdownJson},
+          ${topLandingPathsJson},
+          NOW(),
+          NOW()
+        )
+        ON CONFLICT ("property_id", "day") DO UPDATE SET
+          "unique_visitors" = EXCLUDED.unique_visitors,
+          "returning_visitors" = EXCLUDED.returning_visitors,
+          "total_page_views" = EXCLUDED.total_page_views,
+          "total_entrances" = EXCLUDED.total_entrances,
+          "total_exits" = EXCLUDED.total_exits,
+          "total_conversions" = EXCLUDED.total_conversions,
+          "form_starts" = EXCLUDED.form_starts,
+          "form_submits" = EXCLUDED.form_submits,
+          "new_leads" = EXCLUDED.new_leads,
+          "time_to_first_capture_sum_ms" = EXCLUDED.time_to_first_capture_sum_ms,
+          "time_to_first_capture_count" = EXCLUDED.time_to_first_capture_count,
+          "traffic_source_breakdown" = EXCLUDED.traffic_source_breakdown,
+          "top_landing_paths" = EXCLUDED.top_landing_paths,
+          "generated_at" = NOW(),
+          "updated_at" = NOW()
+      `;
+
+  const ingestInsertSql = sql`
+        INSERT INTO ${INGEST_ROLLUP_TABLE} (
+          "id",
+          "property_id",
+          "day",
+          "events_accepted",
+          "events_rejected",
+          "leads_accepted",
+          "leads_rejected",
+          "p95_ttfb_ms",
+          "error_breakdown",
+          "generated_at",
+          "updated_at"
+        ) VALUES (
+          ${crypto.randomUUID()},
+          ${propertyId},
+          ${dayStart},
+          ${eventsAccepted},
+          ${eventsRejected},
+          ${leadsAccepted},
+          ${leadsRejected},
+          ${p95TtfbMs},
+          ${errorBreakdownJson},
+          NOW(),
+          NOW()
+        )
+        ON CONFLICT ("property_id", "day") DO UPDATE SET
+          "events_accepted" = EXCLUDED.events_accepted,
+          "events_rejected" = EXCLUDED.events_rejected,
+          "leads_accepted" = EXCLUDED.leads_accepted,
+          "leads_rejected" = EXCLUDED.leads_rejected,
+          "p95_ttfb_ms" = EXCLUDED.p95_ttfb_ms,
+          "error_breakdown" = EXCLUDED.error_breakdown,
+          "generated_at" = NOW(),
+          "updated_at" = NOW()
+      `;
+
+  await Promise.all([query(tx, metricsInsertSql), query(tx, ingestInsertSql)]);
 };
 
 export const rollupDateRange = async (
-  prisma: PrismaClient,
+  tx: PoolClient,
   input: RollupDateRangeInput,
 ): Promise<RollupDateRangeResult> => {
   const propertyId = input.propertyId ?? env.ROLLUP_DEFAULT_PROPERTY_ID;
@@ -397,7 +493,7 @@ export const rollupDateRange = async (
     const batch = days.slice(index, index + batchSize);
     await Promise.all(
       batch.map(async (day) => {
-        await computeDailyMetrics(prisma, day, propertyId);
+        await computeDailyMetrics(tx, day, propertyId);
       }),
     );
   }
@@ -416,17 +512,20 @@ export interface RollupFreshness {
 }
 
 export const getRollupFreshness = async (
-  prisma: PrismaClient,
+  tx: PoolClient,
   propertyId: string,
 ): Promise<RollupFreshness> => {
-  const latestMetric = await prisma.dailyMetricRollup.findFirst({
-    where: { propertyId },
-    orderBy: [{ day: "desc" }, { generatedAt: "desc" }],
-    select: {
-      day: true,
-      generatedAt: true,
-    },
-  });
+  const { rows } = await query<{ day: Date; generated_at: Date }>(
+    tx,
+    sql`
+      SELECT "day", "generated_at"
+      FROM ${METRICS_ROLLUP_TABLE}
+      WHERE "property_id" = ${propertyId}
+      ORDER BY "day" DESC, "generated_at" DESC
+      LIMIT 1
+    `,
+  );
+  const latestMetric = rows[0];
 
   if (!latestMetric) {
     return {
@@ -444,7 +543,7 @@ export const getRollupFreshness = async (
 
   return {
     rolledUpThrough: formatIsoDay(latestMetric.day),
-    generatedAt: latestMetric.generatedAt.toISOString(),
+    generatedAt: latestMetric.generated_at.toISOString(),
     lagDays,
   };
 };

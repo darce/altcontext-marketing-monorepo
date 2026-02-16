@@ -1,8 +1,10 @@
-import { Prisma, type PrismaClient } from "@prisma/client";
+import type { PoolClient } from "pg";
 
 import { env } from "../../config/env.js";
-import { databaseSchema } from "../../lib/prisma.js";
+import { query, rawSql, sql } from "../../lib/db.js";
 import { quoteIdentifier, tableRef } from "../../lib/sql.js";
+
+const databaseSchema = process.env.DATABASE_SCHEMA || "public";
 
 export interface MaterializedSummaryRow {
   day: Date;
@@ -29,44 +31,34 @@ const metricsViewTableRef = tableRef(env.METRICS_MATERIALIZED_VIEW_NAME);
 const metricsViewIndexName = `${env.METRICS_MATERIALIZED_VIEW_NAME.slice(0, 48)}_property_day_key`;
 
 export const isMaterializedViewMissingError = (error: unknown): boolean => {
-  if (
-    error instanceof Prisma.PrismaClientKnownRequestError &&
-    error.code === "P2021"
-  ) {
-    return true;
+  if (typeof error === "object" && error !== null && "code" in error) {
+    const code = (error as { code: unknown }).code;
+    return code === "42P01"; // undefined_table
   }
+  return false;
+};
 
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
-    return false;
-  }
-  if (error.code !== "P2010") {
-    return false;
-  }
-
-  const code =
-    typeof error.meta?.code === "string"
-      ? error.meta.code
-      : typeof error.meta?.sqlState === "string"
-        ? error.meta.sqlState
-        : null;
-  if (code === "42P01") {
-    return true;
-  }
-
-  const metaMessage =
-    typeof error.meta?.message === "string" ? error.meta.message : "";
-  const errorMessage = error.message;
-  const combined = `${metaMessage} ${errorMessage}`.toLowerCase();
-  return (
-    combined.includes("does not exist") &&
-    combined.includes(env.METRICS_MATERIALIZED_VIEW_NAME.toLowerCase())
+export const checkMaterializedViewExists = async (
+  tx: PoolClient,
+): Promise<boolean> => {
+  const { rows } = await query(
+    tx,
+    sql`
+      SELECT 1
+      FROM pg_matviews
+      WHERE schemaname = ${databaseSchema}
+        AND matviewname = ${env.METRICS_MATERIALIZED_VIEW_NAME}
+    `,
   );
+  return rows.length > 0;
 };
 
 export const ensureMetricsMaterializedView = async (
-  prisma: PrismaClient,
+  tx: PoolClient,
 ): Promise<void> => {
-  await prisma.$executeRaw`
+  await query(
+    tx,
+    sql`
     CREATE MATERIALIZED VIEW IF NOT EXISTS ${metricsViewTableRef} AS
       SELECT
         m."property_id" AS property_id,
@@ -90,26 +82,35 @@ export const ensureMetricsMaterializedView = async (
         ON i."property_id" = m."property_id"
        AND i."day" = m."day"
     WITH NO DATA
-  `;
-
-  await prisma.$executeRawUnsafe(
-    `CREATE UNIQUE INDEX IF NOT EXISTS ${quoteIdentifier(metricsViewIndexName)} ON ${quoteIdentifier(databaseSchema)}.${quoteIdentifier(env.METRICS_MATERIALIZED_VIEW_NAME)} (property_id, day)`,
+  `,
   );
+
+  const indexName = quoteIdentifier(metricsViewIndexName);
+  const schemaName = quoteIdentifier(databaseSchema);
+  const viewName = quoteIdentifier(env.METRICS_MATERIALIZED_VIEW_NAME);
+
+  const createIndexSql = rawSql(
+    `CREATE UNIQUE INDEX IF NOT EXISTS ${indexName} ON ${schemaName}.${viewName} (property_id, day)`,
+  );
+
+  await query(tx, createIndexSql);
 };
 
 export const refreshMetricsMaterializedView = async (
-  prisma: PrismaClient,
+  tx: PoolClient,
 ): Promise<void> => {
-  await prisma.$executeRaw`REFRESH MATERIALIZED VIEW ${metricsViewTableRef}`;
+  await query(tx, sql`REFRESH MATERIALIZED VIEW ${metricsViewTableRef}`);
 };
 
 export const readMetricsMaterializedViewRows = async (
-  prisma: PrismaClient,
+  tx: PoolClient,
   propertyId: string,
   from: Date,
   to: Date,
-): Promise<MaterializedSummaryRow[]> =>
-  prisma.$queryRaw<Array<MaterializedSummaryRow>>`
+): Promise<MaterializedSummaryRow[]> => {
+  const { rows } = await query<MaterializedSummaryRow>(
+    tx,
+    sql`
     SELECT
       day,
       unique_visitors,
@@ -131,4 +132,29 @@ export const readMetricsMaterializedViewRows = async (
       AND day >= ${from}
       AND day <= ${to}
     ORDER BY day ASC
-  `;
+  `,
+  );
+  return rows;
+};
+
+export const tryRefreshMetricsMaterializedView = async (
+  tx: PoolClient,
+): Promise<void> => {
+  if (!env.METRICS_USE_MATERIALIZED_VIEW) {
+    return;
+  }
+
+  try {
+    await refreshMetricsMaterializedView(tx);
+    console.log("✅ Materialized view refreshed.");
+  } catch (error: unknown) {
+    if (isMaterializedViewMissingError(error)) {
+      console.warn(
+        "⚠️ Materialized view is enabled but not initialized. Run `npm run rollups:mv:init`.",
+      );
+      return;
+    }
+
+    throw error;
+  }
+};

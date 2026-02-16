@@ -1,4 +1,12 @@
-import { ConsentStatus, type Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import type { PoolClient } from "pg";
+
+import { query, sql } from "../lib/db.js";
+import { tableRef } from "../lib/sql.js";
+import { ConsentStatus } from "../lib/schema-enums.js";
+
+const LEADS_TABLE = tableRef("leads");
+const CONSENT_EVENTS_TABLE = tableRef("consent_events");
 
 const assertNever = (value: never): never => {
   throw new Error(`unexpected consent status: ${String(value)}`);
@@ -25,38 +33,59 @@ export const toConsentStatus = (
 };
 
 export const applyConsentStatus = async (
-  tx: Prisma.TransactionClient,
+  tx: PoolClient,
   leadId: string,
   nextStatus: ConsentStatus,
   source: string,
-  ipHash?: string,
+  ipHash?: string | null,
   currentStatus?: ConsentStatus,
 ): Promise<void> => {
   let existingStatus = currentStatus;
+
   if (!existingStatus) {
-    const lead = await tx.lead.findUnique({
-      where: { id: leadId },
-      select: { consentStatus: true },
-    });
-    if (!lead) {
+    const { rows } = await query<{ consent_status: ConsentStatus }>(
+      tx,
+      sql`
+        SELECT "consent_status"
+        FROM ${LEADS_TABLE}
+        WHERE "id" = ${leadId}
+      `,
+    );
+    if (rows.length === 0) {
       return;
     }
-    existingStatus = lead.consentStatus;
+    if (rows.length > 0 && rows[0] !== undefined) {
+      existingStatus = rows[0].consent_status;
+    }
   }
 
   if (existingStatus !== nextStatus) {
-    await tx.lead.update({
-      where: { id: leadId },
-      data: { consentStatus: nextStatus },
-    });
+    await query(
+      tx,
+      sql`
+        UPDATE ${LEADS_TABLE}
+        SET "consent_status" = ${nextStatus}
+        WHERE "id" = ${leadId}
+      `,
+    );
   }
 
-  await tx.consentEvent.create({
-    data: {
-      leadId,
-      status: nextStatus,
-      source,
-      ipHash: ipHash ?? null,
-    },
-  });
+  await query(
+    tx,
+    sql`
+      INSERT INTO ${CONSENT_EVENTS_TABLE} (
+        "id",
+        "lead_id",
+        "status",
+        "source",
+        "ip_hash"
+      ) VALUES (
+        ${randomUUID()},
+        ${leadId},
+        ${nextStatus},
+        ${source},
+        ${ipHash ?? null}
+      )
+    `,
+  );
 };

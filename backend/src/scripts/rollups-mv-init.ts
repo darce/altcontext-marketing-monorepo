@@ -1,4 +1,4 @@
-import { prisma } from "../lib/prisma.js";
+import { pool, transaction } from "../lib/db.js";
 import {
   ensureMetricsMaterializedView,
   refreshMetricsMaterializedView,
@@ -12,13 +12,15 @@ const parseShouldRefresh = (argv: string[]): boolean =>
 const run = async (): Promise<void> => {
   const shouldRefresh = parseShouldRefresh(process.argv.slice(2));
 
-  await ensureMetricsMaterializedView(prisma);
-  console.log("✅ Materialized view initialized.");
+  await transaction(async (tx) => {
+    await ensureMetricsMaterializedView(tx);
+    console.log("✅ Materialized view initialized.");
 
-  if (shouldRefresh) {
-    await refreshMetricsMaterializedView(prisma);
-    console.log("✅ Materialized view refreshed.");
-  }
+    if (shouldRefresh) {
+      await refreshMetricsMaterializedView(tx);
+      console.log("✅ Materialized view refreshed.");
+    }
+  });
 };
 
 void run()
@@ -27,5 +29,5 @@ void run()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await pool.end();
   });

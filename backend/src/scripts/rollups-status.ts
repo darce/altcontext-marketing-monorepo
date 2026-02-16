@@ -1,6 +1,10 @@
 import { env } from "../config/env.js";
-import { prisma } from "../lib/prisma.js";
+import { pool, query, sql } from "../lib/db.js";
+import { tableRef } from "../lib/sql.js";
 import { getRollupFreshness } from "../services/metrics/rollups.js";
+
+const METRICS_ROLLUP_TABLE = tableRef("daily_metric_rollups");
+const INGEST_ROLLUP_TABLE = tableRef("daily_ingest_rollups");
 
 const parsePropertyId = (argv: string[]): string => {
   const propertyArg = argv.find((entry) => entry.startsWith("--property-id="));
@@ -18,22 +22,33 @@ const parsePropertyId = (argv: string[]): string => {
 
 const run = async (): Promise<void> => {
   const propertyId = parsePropertyId(process.argv.slice(2));
+  const client = await pool.connect();
 
-  const freshness = await getRollupFreshness(prisma, propertyId);
-  const totalMetricRows = await prisma.dailyMetricRollup.count({
-    where: { propertyId },
-  });
-  const totalIngestRows = await prisma.dailyIngestRollup.count({
-    where: { propertyId },
-  });
+  try {
+    const freshness = await getRollupFreshness(client, propertyId);
 
-  console.log(`propertyId: ${propertyId}`);
-  console.log(`dailyMetricRollups: ${totalMetricRows}`);
-  console.log(`dailyIngestRollups: ${totalIngestRows}`);
-  console.log(
-    `rolledUpThrough: ${freshness.rolledUpThrough ?? "none"} (lagDays=${freshness.lagDays ?? "n/a"})`,
-  );
-  console.log(`generatedAt: ${freshness.generatedAt ?? "n/a"}`);
+    const { rows: metricRows } = await query<{ count: number }>(
+      client,
+      sql`SELECT COUNT(*)::int as count FROM ${METRICS_ROLLUP_TABLE} WHERE "property_id" = ${propertyId}`,
+    );
+    const totalMetricRows = metricRows[0]?.count ?? 0;
+
+    const { rows: ingestRows } = await query<{ count: number }>(
+      client,
+      sql`SELECT COUNT(*)::int as count FROM ${INGEST_ROLLUP_TABLE} WHERE "property_id" = ${propertyId}`,
+    );
+    const totalIngestRows = ingestRows[0]?.count ?? 0;
+
+    console.log(`propertyId: ${propertyId}`);
+    console.log(`dailyMetricRollups: ${totalMetricRows}`);
+    console.log(`dailyIngestRollups: ${totalIngestRows}`);
+    console.log(
+      `rolledUpThrough: ${freshness.rolledUpThrough ?? "none"} (lagDays=${freshness.lagDays ?? "n/a"})`,
+    );
+    console.log(`generatedAt: ${freshness.generatedAt ?? "n/a"}`);
+  } finally {
+    client.release();
+  }
 };
 
 void run()
@@ -42,5 +57,5 @@ void run()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await pool.end();
   });

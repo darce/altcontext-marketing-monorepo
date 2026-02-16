@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { JsonValue } from "./types.js";
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
@@ -8,7 +8,7 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return prototype === Object.prototype || prototype === null;
 };
 
-const isInputJsonValue = (value: unknown): value is Prisma.InputJsonValue => {
+const isInputJsonValue = (value: unknown): value is JsonValue => {
   if (
     value === null ||
     typeof value === "string" ||
@@ -31,16 +31,14 @@ const isInputJsonValue = (value: unknown): value is Prisma.InputJsonValue => {
   return false;
 };
 
-export const toPrismaJson = (
-  value: unknown,
-): Prisma.InputJsonValue | undefined => {
+export const toJsonValue = (value: unknown): JsonValue | undefined => {
   if (value === undefined) {
     return undefined;
   }
 
   const cloned = structuredClone(value);
   if (!isInputJsonValue(cloned)) {
-    throw new TypeError("value is not serializable to Prisma.InputJsonValue");
+    throw new TypeError("value is not serializable to JsonValue");
   }
 
   return cloned;

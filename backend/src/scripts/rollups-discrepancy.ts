@@ -1,17 +1,10 @@
-import { Prisma } from "@prisma/client";
-
 import { env } from "../config/env.js";
 import { EVENT_INGEST_ENDPOINT } from "../lib/ingest-rejections.js";
 import { toInteger } from "../lib/coerce.js";
-import { prisma } from "../lib/prisma.js";
+import { emptySql, pool, query, sql } from "../lib/db.js";
 import { tableRef } from "../lib/sql.js";
-import {
-  addUtcDays,
-  formatIsoDay,
-  parseIsoDay,
-  startOfUtcDay,
-} from "../schemas/metrics.js";
-import { parseRollupCliArgs } from "./lib/rollup-cli.js";
+import { addUtcDays, formatIsoDay, startOfUtcDay } from "../schemas/metrics.js";
+import { parseRollupCliArgs, getRollupConfig } from "./lib/rollup-cli.js";
 
 interface RawEventsRow {
   day: unknown;
@@ -67,25 +60,30 @@ const buildDays = (from: Date, to: Date): string[] => {
 const run = async (): Promise<void> => {
   const args = parseRollupCliArgs(process.argv.slice(2));
 
-  const today = startOfUtcDay(new Date());
-  const defaultFrom = addUtcDays(today, -(env.ROLLUP_BATCH_DAYS - 1));
-  const from = args.from ? parseIsoDay(args.from) : defaultFrom;
-  const to = args.to ? parseIsoDay(args.to) : today;
-  const propertyId = args.propertyId ?? env.ROLLUP_DEFAULT_PROPERTY_ID;
-
-  if (from.getTime() > to.getTime()) {
-    throw new Error("--from must be before or equal to --to");
-  }
+  const { from, to, propertyId } = getRollupConfig(args);
 
   const toExclusive = addUtcDays(to, 1);
   const isDefaultProperty = propertyId === env.ROLLUP_DEFAULT_PROPERTY_ID;
   const eventPropertyFilter = isDefaultProperty
-    ? Prisma.empty
-    : Prisma.sql`AND e."property_id" = ${propertyId}`;
+    ? emptySql()
+    : sql`AND e."property_id" = ${propertyId}`;
 
-  const [rawEventsRows, rawRejectionRows, rawPageViewsRows, rollupRows] =
-    await Promise.all([
-      prisma.$queryRaw<Array<RawEventsRow>>`
+  const client = await pool.connect();
+  let rawEventsRows: RawEventsRow[];
+  let rawRejectionRows: RawRejectionsRow[];
+  let rawPageViewsRows: RawPageViewsRow[];
+  let rollupRows: RollupRow[];
+
+  try {
+    [
+      { rows: rawEventsRows },
+      { rows: rawRejectionRows },
+      { rows: rawPageViewsRows },
+      { rows: rollupRows },
+    ] = await Promise.all([
+      query<RawEventsRow>(
+        client,
+        sql`
         SELECT
           DATE_TRUNC('day', e."timestamp")::date AS day,
           COUNT(*)::int AS raw_events_accepted
@@ -95,7 +93,10 @@ const run = async (): Promise<void> => {
           ${eventPropertyFilter}
         GROUP BY DATE_TRUNC('day', e."timestamp")::date
       `,
-      prisma.$queryRaw<Array<RawRejectionsRow>>`
+      ),
+      query<RawRejectionsRow>(
+        client,
+        sql`
         SELECT
           DATE_TRUNC('day', r."occurred_at")::date AS day,
           COUNT(*) FILTER (WHERE r."endpoint" = ${EVENT_INGEST_ENDPOINT})::int AS raw_events_rejected
@@ -105,7 +106,10 @@ const run = async (): Promise<void> => {
           AND r."occurred_at" < ${toExclusive}
         GROUP BY DATE_TRUNC('day', r."occurred_at")::date
       `,
-      prisma.$queryRaw<Array<RawPageViewsRow>>`
+      ),
+      query<RawPageViewsRow>(
+        client,
+        sql`
         SELECT
           DATE_TRUNC('day', e."timestamp")::date AS day,
           COUNT(*) FILTER (WHERE e."event_type" = 'page_view')::int AS raw_page_views
@@ -115,7 +119,10 @@ const run = async (): Promise<void> => {
           AND e."timestamp" < ${toExclusive}
         GROUP BY DATE_TRUNC('day', e."timestamp")::date
       `,
-      prisma.$queryRaw<Array<RollupRow>>`
+      ),
+      query<RollupRow>(
+        client,
+        sql`
         SELECT
           m."day"::date AS day,
           COALESCE(i."events_accepted", 0)::int AS rollup_events_accepted,
@@ -129,7 +136,11 @@ const run = async (): Promise<void> => {
           AND m."day" >= ${from}
           AND m."day" <= ${to}
       `,
+      ),
     ]);
+  } finally {
+    client.release();
+  }
 
   const rawEventsByDay = new Map(
     rawEventsRows.map((row) => [
@@ -212,5 +223,5 @@ void run()
     process.exitCode = 1;
   })
   .finally(async () => {
-    await prisma.$disconnect();
+    await pool.end();
   });

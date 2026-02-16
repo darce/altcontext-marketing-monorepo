@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 
 import { assertAdminRequest } from "../lib/admin-auth.js";
-import { prisma } from "../lib/prisma.js";
+import { transaction } from "../lib/db.js";
 import { requestContextFrom } from "../lib/request-context.js";
 import {
   deleteByEmailBodySchema,
@@ -53,7 +53,7 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(202).send({ ok: true });
       }
 
-      const result = await prisma.$transaction((tx) =>
+      const result = await transaction((tx) =>
         captureLead(tx, body, requestContextFrom(request)),
       );
 
@@ -77,7 +77,7 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const body = unsubscribeBodySchema.parse(request.body);
-      const result = await prisma.$transaction((tx) =>
+      const result = await transaction((tx) =>
         unsubscribeLead(tx, body.email, requestContextFrom(request)),
       );
       return reply.code(200).send({ ok: true, ...result });
@@ -100,7 +100,7 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const body = deleteByEmailBodySchema.parse(request.body);
-      const result = await prisma.$transaction((tx) =>
+      const result = await transaction((tx) =>
         deleteLeadByEmail(tx, body.email),
       );
       return reply.code(200).send({ ok: true, ...result });

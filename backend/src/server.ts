@@ -1,4 +1,4 @@
-import { prisma } from "./lib/prisma.js";
+import { pool } from "./lib/db.js";
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
 
@@ -7,31 +7,24 @@ const startServer = async (): Promise<void> => {
 
   const shutdown = async (): Promise<void> => {
     await app.close();
-    await prisma.$disconnect();
+    await pool.end();
   };
 
-  process.on("SIGTERM", () => {
-    void shutdown()
-      .catch((error: unknown) => {
-        app.log.error({ err: error }, "graceful shutdown failed");
-      })
-      .finally(() => {
-        process.exit(0);
-      });
-  });
-
-  process.on("SIGINT", () => {
-    void shutdown()
-      .catch((error: unknown) => {
-        app.log.error({ err: error }, "graceful shutdown failed");
-      })
-      .finally(() => {
-        process.exit(0);
-      });
+  ["SIGTERM", "SIGINT"].forEach((signal) => {
+    process.on(signal, () => {
+      void shutdown()
+        .catch((error: unknown) => {
+          app.log.error({ err: error }, "graceful shutdown failed");
+        })
+        .finally(() => {
+          process.exit(0);
+        });
+    });
   });
 
   try {
-    await prisma.$connect();
+    const client = await pool.connect();
+    client.release();
   } catch (error) {
     app.log.error({ err: error }, "database connection failed");
     process.exitCode = 1;
@@ -45,7 +38,7 @@ const startServer = async (): Promise<void> => {
     });
   } catch (error) {
     app.log.error({ err: error }, "server startup failed");
-    await prisma.$disconnect();
+    await pool.end();
     process.exitCode = 1;
   }
 };

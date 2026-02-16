@@ -2,22 +2,26 @@ import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 
 import { env } from "./config/env.js";
+import { query, sql, transaction } from "./lib/db.js";
 import {
   INVALID_REQUEST_REASON,
   resolveIngestEndpoint,
 } from "./lib/ingest-rejections.js";
-import { prisma } from "./lib/prisma.js";
+import { tableRef } from "./lib/sql.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
 import { leadRoutes } from "./routes/leads.js";
 import { metricsRoutes } from "./routes/metrics.js";
 
+const INGEST_REJECTIONS_TABLE = tableRef("ingest_rejections");
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
-
+// ... (resolveRejectedPropertyId implementation remains same, skipping lines for brevity if possible, but replace needs full context usually or smart chunks)
 const resolveRejectedPropertyId = (body: unknown): string => {
   if (!isRecord(body)) {
     return env.ROLLUP_DEFAULT_PROPERTY_ID;
@@ -89,14 +93,27 @@ export const createApp = async (): Promise<FastifyInstance> => {
       if (ingestEndpoint) {
         const propertyId = resolveRejectedPropertyId(request.body);
         try {
-          await prisma.ingestRejection.create({
-            data: {
-              propertyId,
-              endpoint: ingestEndpoint,
-              reason: INVALID_REQUEST_REASON,
-              statusCode: 400,
-              occurredAt: new Date(),
-            },
+          await transaction(async (tx) => {
+            await query(
+              tx,
+              sql`
+                INSERT INTO ${INGEST_REJECTIONS_TABLE} (
+                  "id",
+                  "property_id",
+                  "endpoint",
+                  "reason",
+                  "status_code",
+                  "occurred_at"
+                ) VALUES (
+                  ${randomUUID()},
+                  ${propertyId},
+                  ${ingestEndpoint},
+                  ${INVALID_REQUEST_REASON},
+                  400,
+                  NOW()
+                )
+              `,
+            );
           });
         } catch (ingestError: unknown) {
           request.log.warn(

@@ -1,7 +1,10 @@
-import { TrafficSource, type PrismaClient } from "@prisma/client";
+import type { PoolClient } from "pg";
 
 import { env } from "../../config/env.js";
 import { toBigInt, toInteger } from "../../lib/coerce.js";
+import { query, sql } from "../../lib/db.js";
+import { tableRef } from "../../lib/sql.js";
+import { TrafficSource } from "../../lib/schema-enums.js";
 import type { SummaryQuery } from "../../schemas/metrics.js";
 import {
   addUtcDays,
@@ -10,11 +13,14 @@ import {
   startOfUtcDay,
 } from "../../schemas/metrics.js";
 import {
-  isMaterializedViewMissingError,
   readMetricsMaterializedViewRows,
+  checkMaterializedViewExists,
   type MaterializedSummaryRow,
 } from "./materialized-view.js";
 import { getRollupFreshness } from "./rollups.js";
+
+const METRICS_ROLLUP_TABLE = tableRef("daily_metric_rollups");
+const INGEST_ROLLUP_TABLE = tableRef("daily_ingest_rollups");
 
 interface MetricValue {
   value: number;
@@ -297,6 +303,80 @@ const toMetricRowsFromView = (
     trafficSourceBreakdown: row.traffic_source_breakdown,
   }));
 
+const fetchWindowRowsFromRollups = async (
+  tx: PoolClient,
+  propertyId: string,
+  from: Date,
+  to: Date,
+): Promise<{
+  metricRows: MetricRollupRow[];
+  ingestRows: IngestRollupRow[];
+}> => {
+  const [{ rows: metricRows }, { rows: ingestRows }] = await Promise.all([
+    query<MetricRollupRow>(
+      tx,
+      sql`
+        SELECT
+          "day",
+          "unique_visitors" AS "uniqueVisitors",
+          "returning_visitors" AS "returningVisitors",
+          "total_page_views" AS "totalPageViews",
+          "total_entrances" AS "totalEntrances",
+          "total_conversions" AS "totalConversions",
+          "form_starts" AS "formStarts",
+          "form_submits" AS "formSubmits",
+          "new_leads" AS "newLeads",
+          "time_to_first_capture_sum_ms" AS "timeToFirstCaptureSumMs",
+          "time_to_first_capture_count" AS "timeToFirstCaptureCount",
+          "traffic_source_breakdown" AS "trafficSourceBreakdown"
+        FROM ${METRICS_ROLLUP_TABLE}
+        WHERE "property_id" = ${propertyId}
+          AND "day" >= ${from}
+          AND "day" <= ${to}
+        ORDER BY "day" ASC
+      `,
+    ),
+    query<IngestRollupRow>(
+      tx,
+      sql`
+        SELECT
+          "day",
+          "events_accepted" AS "eventsAccepted",
+          "events_rejected" AS "eventsRejected",
+          "p95_ttfb_ms" AS "p95TtfbMs"
+        FROM ${INGEST_ROLLUP_TABLE}
+        WHERE "property_id" = ${propertyId}
+          AND "day" >= ${from}
+          AND "day" <= ${to}
+        ORDER BY "day" ASC
+      `,
+    ),
+  ]);
+
+  return {
+    metricRows: metricRows.map((row) => ({
+      day: row.day,
+      uniqueVisitors: toInteger(row.uniqueVisitors),
+      returningVisitors: toInteger(row.returningVisitors),
+      totalPageViews: toInteger(row.totalPageViews),
+      totalEntrances: toInteger(row.totalEntrances),
+      totalConversions: toInteger(row.totalConversions),
+      formStarts: toInteger(row.formStarts),
+      formSubmits: toInteger(row.formSubmits),
+      newLeads: toInteger(row.newLeads),
+      timeToFirstCaptureSumMs: toBigInt(row.timeToFirstCaptureSumMs),
+      timeToFirstCaptureCount: toInteger(row.timeToFirstCaptureCount),
+      trafficSourceBreakdown: row.trafficSourceBreakdown,
+    })),
+    ingestRows: ingestRows.map((row) => ({
+      day: row.day,
+      eventsAccepted: toInteger(row.eventsAccepted),
+      eventsRejected: toInteger(row.eventsRejected),
+      p95TtfbMs: row.p95TtfbMs === null ? null : toInteger(row.p95TtfbMs),
+    })),
+  };
+};
+
 const toIngestRowsFromView = (
   rows: MaterializedSummaryRow[],
 ): IngestRollupRow[] =>
@@ -307,66 +387,8 @@ const toIngestRowsFromView = (
     p95TtfbMs: row.p95_ttfb_ms === null ? null : toInteger(row.p95_ttfb_ms),
   }));
 
-const fetchWindowRowsFromRollups = async (
-  prisma: PrismaClient,
-  propertyId: string,
-  from: Date,
-  to: Date,
-): Promise<{
-  metricRows: MetricRollupRow[];
-  ingestRows: IngestRollupRow[];
-}> => {
-  const [metricRows, ingestRows] = await Promise.all([
-    prisma.dailyMetricRollup.findMany({
-      where: {
-        propertyId,
-        day: {
-          gte: from,
-          lte: to,
-        },
-      },
-      orderBy: { day: "asc" },
-      select: {
-        day: true,
-        uniqueVisitors: true,
-        returningVisitors: true,
-        totalPageViews: true,
-        totalEntrances: true,
-        totalConversions: true,
-        formStarts: true,
-        formSubmits: true,
-        newLeads: true,
-        timeToFirstCaptureSumMs: true,
-        timeToFirstCaptureCount: true,
-        trafficSourceBreakdown: true,
-      },
-    }),
-    prisma.dailyIngestRollup.findMany({
-      where: {
-        propertyId,
-        day: {
-          gte: from,
-          lte: to,
-        },
-      },
-      orderBy: { day: "asc" },
-      select: {
-        day: true,
-        eventsAccepted: true,
-        eventsRejected: true,
-        p95TtfbMs: true,
-      },
-    }),
-  ]);
-
-  return {
-    metricRows,
-    ingestRows,
-  };
-};
-
 const fetchWindowRows = async (
-  prisma: PrismaClient,
+  tx: PoolClient,
   propertyId: string,
   from: Date,
   to: Date,
@@ -375,27 +397,19 @@ const fetchWindowRows = async (
   ingestRows: IngestRollupRow[];
 }> => {
   if (!env.METRICS_USE_MATERIALIZED_VIEW) {
-    return fetchWindowRowsFromRollups(prisma, propertyId, from, to);
+    return fetchWindowRowsFromRollups(tx, propertyId, from, to);
   }
 
-  try {
-    const rows = await readMetricsMaterializedViewRows(
-      prisma,
-      propertyId,
-      from,
-      to,
-    );
-    return {
-      metricRows: toMetricRowsFromView(rows),
-      ingestRows: toIngestRowsFromView(rows),
-    };
-  } catch (error: unknown) {
-    if (!isMaterializedViewMissingError(error)) {
-      throw error;
-    }
-
-    return fetchWindowRowsFromRollups(prisma, propertyId, from, to);
+  const viewExists = await checkMaterializedViewExists(tx);
+  if (!viewExists) {
+    return fetchWindowRowsFromRollups(tx, propertyId, from, to);
   }
+
+  const rows = await readMetricsMaterializedViewRows(tx, propertyId, from, to);
+  return {
+    metricRows: toMetricRowsFromView(rows),
+    ingestRows: toIngestRowsFromView(rows),
+  };
 };
 
 const isSummaryCacheEnabled = (): boolean =>
@@ -458,7 +472,7 @@ const writeSummaryCache = (key: string, value: MetricsSummary): void => {
 };
 
 export const fetchMetricsSummary = async (
-  prisma: PrismaClient,
+  tx: PoolClient,
   query: SummaryQuery,
 ): Promise<MetricsSummary> => {
   const cacheKey = buildSummaryCacheKey(query);
@@ -476,10 +490,10 @@ export const fetchMetricsSummary = async (
   const compareTo = addUtcDays(windowFrom, -1);
 
   const [currentRows, freshness, compareRows] = await Promise.all([
-    fetchWindowRows(prisma, propertyId, windowFrom, windowTo),
-    getRollupFreshness(prisma, propertyId),
+    fetchWindowRows(tx, propertyId, windowFrom, windowTo),
+    getRollupFreshness(tx, propertyId),
     query.compareTo
-      ? fetchWindowRows(prisma, propertyId, compareFrom, compareTo)
+      ? fetchWindowRows(tx, propertyId, compareFrom, compareTo)
       : Promise.resolve({
           metricRows: [],
           ingestRows: [],
