@@ -209,11 +209,13 @@ const resolveDeviceType = (
 
 export const ingestEvent = async (
   tx: PoolClient,
+  tenantId: string,
   body: EventBody,
   context: RequestContext,
 ): Promise<EventIngestResult> => {
   const occurredAt = body.timestamp ?? new Date();
   const { visitor, session } = await ensureVisitorSession(tx, {
+    tenantId,
     anonId: body.anonId,
     occurredAt,
     request: context,
@@ -281,20 +283,20 @@ export const ingestEvent = async (
     tx,
     sql`
       INSERT INTO ${EVENTS_TABLE} (
-        "id", "visitor_id", "session_id", "dedupe_key",
+        "id", "tenant_id", "visitor_id", "session_id", "dedupe_key",
         "event_type", "path", "timestamp",
         "ip_hash", "ua_hash", "props",
         "property_id", "traffic_source", "device_type",
         "country_code", "is_entrance", "is_exit", "is_conversion"
       )
       VALUES (
-        ${eventId}, ${visitor.id}, ${session.id}, ${dedupeKey},
+        ${eventId}, ${tenantId}, ${visitor.id}, ${session.id}, ${dedupeKey},
         ${body.eventType}, ${body.path}, ${occurredAt},
         ${context.ipHash}, ${context.uaHash}, ${serializedProps}::jsonb,
         ${propertyId}, ${trafficSource}::${TRAFFIC_SOURCE_TYPE}, ${deviceType}::${DEVICE_TYPE_TYPE},
         ${countryCode}, ${isEntrance}, ${isExit}, ${isConversion}
       )
-      ON CONFLICT ("dedupe_key") DO NOTHING
+      ON CONFLICT ("tenant_id", "dedupe_key") DO NOTHING
       RETURNING "id", "visitor_id" AS "visitorId", "session_id" AS "sessionId"
     `,
   );
@@ -310,7 +312,8 @@ export const ingestEvent = async (
       sql`
         SELECT "id", "visitor_id" AS "visitorId", "session_id" AS "sessionId"
         FROM ${EVENTS_TABLE}
-        WHERE "dedupe_key" = ${dedupeKey}
+        WHERE "tenant_id" = ${tenantId}
+          AND "dedupe_key" = ${dedupeKey}
       `,
     );
     if (existingRows.length === 0) {

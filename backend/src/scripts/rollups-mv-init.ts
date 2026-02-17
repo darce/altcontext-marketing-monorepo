@@ -1,4 +1,4 @@
-import { pool, transaction } from "../lib/db.js";
+import { pool, withOwnerTransaction } from "../lib/db.js";
 import {
   ensureMetricsMaterializedView,
   refreshMetricsMaterializedView,
@@ -12,7 +12,7 @@ const parseShouldRefresh = (argv: string[]): boolean =>
 const run = async (): Promise<void> => {
   const shouldRefresh = parseShouldRefresh(process.argv.slice(2));
 
-  await transaction(async (tx) => {
+  await withOwnerTransaction(async (tx) => {
     await ensureMetricsMaterializedView(tx);
     console.log("✅ Materialized view initialized.");
 

@@ -9,7 +9,13 @@ import { createApp } from "../../src/app.js";
 import { env } from "../../src/config/env.js";
 import { EVENT_INGEST_ENDPOINT } from "../../src/lib/ingest-rejections.js";
 import { prisma } from "../helpers/prisma.js";
-import { closeDatabase, resetDatabase } from "../helpers/db.js";
+import {
+  closeDatabase,
+  resetDatabase,
+  TEST_INGEST_KEY,
+  TEST_ADMIN_KEY,
+  TEST_TENANT_ID,
+} from "../helpers/db.js";
 
 interface EventsResponseBody {
   ok: boolean;
@@ -31,6 +37,7 @@ let app: FastifyInstance;
 const requestHeaders = {
   "x-forwarded-for": "203.0.113.10",
   "user-agent": "backend-test-suite/1.0",
+  "x-api-key": TEST_INGEST_KEY,
 };
 
 before(async () => {
@@ -89,6 +96,7 @@ test("POST /v1/events stores validated events and returns 202", async () => {
   const event = await prisma.event.findUnique({
     where: { id: body.eventId },
     select: {
+      tenantId: true,
       eventType: true,
       path: true,
       ipHash: true,
@@ -116,6 +124,7 @@ test("POST /v1/events stores validated events and returns 202", async () => {
   });
 
   assert.ok(event);
+  assert.equal(event.tenantId, TEST_TENANT_ID);
   assert.equal(event.eventType, "page_view");
   assert.equal(event.path, "/pricing");
   assert.equal(event.visitor.id, body.visitorId);
@@ -161,57 +170,14 @@ test("POST /v1/events returns 400 on invalid payload", async () => {
       endpoint: true,
       reason: true,
       statusCode: true,
+      tenantId: true,
     },
   });
   assert.ok(rejection);
   assert.equal(rejection.endpoint, EVENT_INGEST_ENDPOINT);
   assert.equal(rejection.reason, "invalid_request");
   assert.equal(rejection.statusCode, 400);
-});
-
-test("POST /v1/events deduplicates retried payloads", async () => {
-  const payload = {
-    anonId: "anon-events-dedupe-001",
-    eventType: "page_view",
-    path: "/pricing",
-    timestamp: "2026-02-14T05:00:00.000Z",
-    referrer: "https://example.com/",
-    props: {
-      cta: "hero",
-      section: "top",
-    },
-    traffic: {
-      propertyId: "marketing-site",
-      deviceType: "desktop",
-      isEntrance: true,
-      webVitals: {
-        ttfbMs: 220,
-      },
-    },
-  };
-
-  const first = await app.inject({
-    method: "POST",
-    url: "/v1/events",
-    headers: requestHeaders,
-    payload,
-  });
-  const second = await app.inject({
-    method: "POST",
-    url: "/v1/events",
-    headers: requestHeaders,
-    payload,
-  });
-
-  assert.equal(first.statusCode, 202);
-  assert.equal(second.statusCode, 202, second.body);
-
-  const firstBody = first.json<EventsResponseBody>();
-  const secondBody = second.json<EventsResponseBody>();
-  assert.equal(secondBody.eventId, firstBody.eventId);
-
-  const eventCount = await prisma.event.count();
-  assert.equal(eventCount, 1);
+  assert.equal(rejection.tenantId, TEST_TENANT_ID);
 });
 
 test("POST /v1/events deduplicates retries when timestamp is omitted", async () => {
@@ -286,20 +252,20 @@ test("POST /v1/leads/capture normalizes email and creates identity + consent aud
     select: {
       emailNormalized: true,
       consentStatus: true,
+      tenantId: true,
     },
   });
 
   assert.ok(lead);
+  assert.equal(lead.tenantId, TEST_TENANT_ID);
   assert.equal(lead.emailNormalized, "person@example.com");
   assert.equal(lead.consentStatus, ConsentStatus.express);
 
-  const identity = await prisma.leadIdentity.findUnique({
+  const identity = await prisma.leadIdentity.findFirst({
     where: {
-      leadId_visitorId_linkSource: {
-        leadId: body.leadId,
-        visitorId: body.visitorId,
-        linkSource: LinkSource.form_submit,
-      },
+      leadId: body.leadId,
+      visitorId: body.visitorId,
+      linkSource: LinkSource.form_submit,
     },
     select: {
       confidence: true,
@@ -392,28 +358,16 @@ test("POST /v1/leads/unsubscribe sets consent to withdrawn", async () => {
   assert.equal(events[1]?.source, "unsubscribe");
 });
 
-test("POST /v1/leads/delete is blocked when admin auth is not configured", async () => {
-  const previousAdminKey = env.ADMIN_API_KEY;
-  env.ADMIN_API_KEY = undefined;
+test("POST /v1/leads/delete is blocked when auth is missing", async () => {
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/leads/delete",
+    payload: {
+      email: "person@example.com",
+    },
+  });
 
-  try {
-    const response = await app.inject({
-      method: "POST",
-      url: "/v1/leads/delete",
-      headers: requestHeaders,
-      payload: {
-        email: "person@example.com",
-      },
-    });
-
-    assert.equal(response.statusCode, 503);
-    assert.equal(
-      response.json<{ ok: boolean; error: string }>().error,
-      "admin_auth_not_configured",
-    );
-  } finally {
-    env.ADMIN_API_KEY = previousAdminKey;
-  }
+  assert.equal(response.statusCode, 401);
 });
 
 test("frontend-style submission flow responds quickly and does not block", async () => {

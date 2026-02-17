@@ -6,13 +6,14 @@ import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 
 import { env } from "./config/env.js";
-import { query, sql, transaction } from "./lib/db.js";
+import { query, sql, withTenant } from "./lib/db.js";
 import {
   INVALID_REQUEST_REASON,
   resolveIngestEndpoint,
 } from "./lib/ingest-rejections.js";
 import { tableRef } from "./lib/sql.js";
 import { mountDashboard } from "./lib/dashboard.js";
+import { tenantResolutionHook } from "./lib/tenant-resolution.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
 import { leadRoutes } from "./routes/leads.js";
@@ -93,34 +94,40 @@ export const createApp = async (): Promise<FastifyInstance> => {
       const ingestEndpoint = resolveIngestEndpoint(request.url);
       if (ingestEndpoint) {
         const propertyId = resolveRejectedPropertyId(request.body);
-        try {
-          await transaction(async (tx) => {
-            await query(
-              tx,
-              sql`
-                INSERT INTO ${INGEST_REJECTIONS_TABLE} (
-                  "id",
-                  "property_id",
-                  "endpoint",
-                  "reason",
-                  "status_code",
-                  "occurred_at"
-                ) VALUES (
-                  ${randomUUID()},
-                  ${propertyId},
-                  ${ingestEndpoint},
-                  ${INVALID_REQUEST_REASON},
-                  400,
-                  NOW()
-                )
-              `,
+        const tenantId = request.tenantId; // Resolved by tenantResolutionHook if it reached this stage
+
+        if (tenantId) {
+          try {
+            await withTenant(tenantId, async (tx) => {
+              await query(
+                tx,
+                sql`
+                  INSERT INTO ${INGEST_REJECTIONS_TABLE} (
+                    "id",
+                    "tenant_id",
+                    "property_id",
+                    "endpoint",
+                    "reason",
+                    "status_code",
+                    "occurred_at"
+                  ) VALUES (
+                    ${randomUUID()},
+                    ${tenantId},
+                    ${propertyId},
+                    ${ingestEndpoint},
+                    ${INVALID_REQUEST_REASON},
+                    400,
+                    NOW()
+                  )
+                `,
+              );
+            });
+          } catch (ingestError: unknown) {
+            request.log.warn(
+              { err: ingestError },
+              "failed to record ingest rejection",
             );
-          });
-        } catch (ingestError: unknown) {
-          request.log.warn(
-            { err: ingestError },
-            "failed to record ingest rejection",
-          );
+          }
         }
       }
 
@@ -157,9 +164,15 @@ export const createApp = async (): Promise<FastifyInstance> => {
   });
 
   await app.register(healthRoutes);
-  await app.register(eventRoutes);
-  await app.register(leadRoutes);
-  await app.register(metricsRoutes);
+
+  // Authenticated/Tenant-scoped API routes
+  await app.register(async (api) => {
+    api.addHook("onRequest", tenantResolutionHook);
+
+    await api.register(eventRoutes);
+    await api.register(leadRoutes);
+    await api.register(metricsRoutes);
+  });
 
   // Dashboard catch-all — must be registered AFTER API routes so /v1/* takes priority.
   await mountDashboard(app);

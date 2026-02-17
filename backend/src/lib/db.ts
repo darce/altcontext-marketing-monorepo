@@ -1,4 +1,5 @@
 import pg from "pg";
+import { env } from "../config/env.js";
 
 // Ensure the pg driver serialises and parses Date values in UTC so that
 // `date` columns are not shifted by the server's local-time offset.
@@ -10,7 +11,12 @@ pg.defaults.parseInputDatesAsUTC = true;
 // round-trip correctly regardless of the host machine's timezone.
 pg.types.setTypeParser(1114, (str: string) => new Date(str + "Z"));
 
-export const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+export const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
+
+// Initial role for all connections
+pool.on("connect", (client) => {
+  void client.query("SET ROLE app_user");
+});
 
 export interface SqlQuery {
   text: string;
@@ -59,8 +65,8 @@ export const query = <T extends pg.QueryResultRow>(
   q: SqlQuery,
 ): Promise<pg.QueryResult<T>> => client.query<T>(q.text, q.values);
 
+// ts-prune-ignore-next — used in tests; low-level primitive for non-tenant-scoped operations
 export const transaction = async <T>(
-  // eslint-disable-next-line no-unused-vars
   fn: (client: pg.PoolClient) => Promise<T>,
 ): Promise<T> => {
   const client = await pool.connect();
@@ -73,6 +79,75 @@ export const transaction = async <T>(
     await client.query("ROLLBACK");
     throw err;
   } finally {
+    client.release();
+  }
+};
+
+// ts-prune-ignore-next — consumed by service layer in MT-1 Phase 3
+export const withTenant = async <T>(
+  tenantId: string,
+  fn: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    // Ensure we are app_user (in case connection was leaked or reset)
+    await client.query("SET ROLE app_user");
+    // Set local session variable for RLS (MT-2) and auditing
+    // Note: SET LOCAL doesn't support parameters, so we use set_config
+    await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [
+      tenantId,
+    ]);
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Escapes RLS by resetting the role to the table owner.
+ * Used for background scripts (rollups, purge) that need cross-tenant access.
+ */
+export const withOwnerRole = async <T>(
+  fn: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> => {
+  const client = await pool.connect();
+  try {
+    await client.query("RESET ROLE");
+    const result = await fn(client);
+    return result;
+  } finally {
+    // Restore app_user for the next user of this connection
+    await client.query("SET ROLE app_user").catch(() => {});
+    client.release();
+  }
+};
+
+/**
+ * Escapes RLS by resetting the role to the table owner and starting a transaction.
+ * Used for maintenance DDL (materialized view init/refresh).
+ */
+export const withOwnerTransaction = async <T>(
+  fn: (client: pg.PoolClient) => Promise<T>,
+): Promise<T> => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query("RESET ROLE");
+    const result = await fn(client);
+    await client.query("COMMIT");
+    return result;
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    // Restore app_user for the next user of this connection
+    await client.query("SET ROLE app_user").catch(() => {});
     client.release();
   }
 };

@@ -1,14 +1,21 @@
-import { pool, query, sql } from "../../src/lib/db.js";
+import { pool, query, sql, withOwnerRole } from "../../src/lib/db.js";
 import { tableRef } from "../../src/lib/sql.js";
 import { randomUUID } from "node:crypto";
+import { env } from "../../src/config/env.js";
 
+/**
+ * Standalone local-dev seeding helper for retention/rollup smoke tests.
+ * Not imported by the automated test suite.
+ */
 const EVENTS_TABLE = tableRef("events");
 const SESSIONS_TABLE = tableRef("sessions");
 const VISITORS_TABLE = tableRef("visitors");
 
 const run = async () => {
-  const client = await pool.connect();
-  try {
+  const tenantId =
+    env.BOOTSTRAP_TENANT_ID ?? "00000000-0000-4000-a000-000000000001";
+
+  await withOwnerRole(async (client) => {
     const visitorId = randomUUID();
     const sessionId = randomUUID();
     const oldDate = new Date(Date.now() - 100 * 24 * 60 * 60 * 1000); // 100 days ago
@@ -18,8 +25,8 @@ const run = async () => {
     await query(
       client,
       sql`
-      INSERT INTO ${VISITORS_TABLE} (id, anon_id, created_at, updated_at)
-      VALUES (${visitorId}, 'seed-visitor', ${oldDate}, ${oldDate})
+      INSERT INTO ${VISITORS_TABLE} (id, tenant_id, anon_id, created_at, updated_at)
+      VALUES (${visitorId}, ${tenantId}, 'seed-visitor', ${oldDate}, ${oldDate})
     `,
     );
 
@@ -27,15 +34,15 @@ const run = async () => {
     await query(
       client,
       sql`
-      INSERT INTO ${SESSIONS_TABLE} (id, visitor_id, started_at, updated_at)
-      VALUES (${sessionId}, ${visitorId}, ${oldDate}, ${oldDate})
+      INSERT INTO ${SESSIONS_TABLE} (id, tenant_id, visitor_id, started_at, updated_at)
+      VALUES (${sessionId}, ${tenantId}, ${visitorId}, ${oldDate}, ${oldDate})
     `,
     );
     await query(
       client,
       sql`
-      INSERT INTO ${EVENTS_TABLE} (id, visitor_id, session_id, event_type, timestamp, property_id)
-      VALUES (${randomUUID()}, ${visitorId}, ${sessionId}, 'page_view', ${oldDate}, 'p1')
+      INSERT INTO ${EVENTS_TABLE} (id, tenant_id, visitor_id, session_id, event_type, timestamp, property_id)
+      VALUES (${randomUUID()}, ${tenantId}, ${visitorId}, ${sessionId}, 'page_view', ${oldDate}, 'p1')
     `,
     );
 
@@ -44,23 +51,22 @@ const run = async () => {
     await query(
       client,
       sql`
-      INSERT INTO ${SESSIONS_TABLE} (id, visitor_id, started_at, updated_at)
-      VALUES (${recentSessionId}, ${visitorId}, ${recentDate}, ${recentDate})
+      INSERT INTO ${SESSIONS_TABLE} (id, tenant_id, visitor_id, started_at, updated_at)
+      VALUES (${recentSessionId}, ${tenantId}, ${visitorId}, ${recentDate}, ${recentDate})
     `,
     );
     await query(
       client,
       sql`
-      INSERT INTO ${EVENTS_TABLE} (id, visitor_id, session_id, event_type, timestamp, property_id)
-      VALUES (${randomUUID()}, ${visitorId}, ${recentSessionId}, 'page_view', ${recentDate}, 'p1')
+      INSERT INTO ${EVENTS_TABLE} (id, tenant_id, visitor_id, session_id, event_type, timestamp, property_id)
+      VALUES (${randomUUID()}, ${tenantId}, ${visitorId}, ${recentSessionId}, 'page_view', ${recentDate}, 'p1')
     `,
     );
 
     console.log("✅ Seed complete.");
-  } finally {
-    client.release();
-    await pool.end();
-  }
+  });
 };
 
-run().catch(console.error);
+run()
+  .catch(console.error)
+  .finally(() => pool.end());

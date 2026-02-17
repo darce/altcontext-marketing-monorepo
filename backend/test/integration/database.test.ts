@@ -4,7 +4,9 @@ import { after, before, beforeEach, test } from "node:test";
 import { LinkSource, Prisma } from "@prisma/client";
 
 import { prisma } from "../helpers/prisma.js";
-import { closeDatabase, resetDatabase } from "../helpers/db.js";
+import { closeDatabase, resetDatabase, TEST_TENANT_ID } from "../helpers/db.js";
+
+const OTHER_TENANT_ID = "00000000-0000-4000-a000-000000000002";
 
 before(async () => {
   await resetDatabase();
@@ -12,6 +14,14 @@ before(async () => {
 
 beforeEach(async () => {
   await resetDatabase();
+  // Create another tenant for cross-tenant testing
+  await prisma.tenant.create({
+    data: {
+      id: OTHER_TENANT_ID,
+      name: "Other Tenant",
+      slug: "other-tenant",
+    },
+  });
 });
 
 after(async () => {
@@ -52,6 +62,9 @@ test("migration tables exist in the active schema", async () => {
 
   for (const expected of [
     "_prisma_migrations",
+    "tenants",
+    "api_keys",
+    "users",
     "visitors",
     "sessions",
     "events",
@@ -71,16 +84,19 @@ test("migration tables exist in the active schema", async () => {
   }
 });
 
-test("leads.email_normalized enforces uniqueness", async () => {
+test("leads.email_normalized enforces uniqueness per tenant", async () => {
   await prisma.lead.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       emailNormalized: "unique@example.com",
     },
   });
 
+  // Duplicate in same tenant should fail
   await assert.rejects(
     prisma.lead.create({
       data: {
+        tenantId: TEST_TENANT_ID,
         emailNormalized: "unique@example.com",
       },
     }),
@@ -88,18 +104,29 @@ test("leads.email_normalized enforces uniqueness", async () => {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002",
   );
+
+  // Same email in different tenant should succeed
+  await prisma.lead.create({
+    data: {
+      tenantId: OTHER_TENANT_ID,
+      emailNormalized: "unique@example.com",
+    },
+  });
 });
 
-test("visitors.anon_id enforces uniqueness", async () => {
+test("visitors.anon_id enforces uniqueness per tenant", async () => {
   await prisma.visitor.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       anonId: "anon-unique-visitor",
     },
   });
 
+  // Duplicate in same tenant should fail
   await assert.rejects(
     prisma.visitor.create({
       data: {
+        tenantId: TEST_TENANT_ID,
         anonId: "anon-unique-visitor",
       },
     }),
@@ -107,17 +134,27 @@ test("visitors.anon_id enforces uniqueness", async () => {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002",
   );
+
+  // Same anonId in different tenant should succeed
+  await prisma.visitor.create({
+    data: {
+      tenantId: OTHER_TENANT_ID,
+      anonId: "anon-unique-visitor",
+    },
+  });
 });
 
-test("lead_identities composite key enforces uniqueness", async () => {
+test("lead_identities composite key enforces uniqueness per tenant", async () => {
   const lead = await prisma.lead.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       emailNormalized: "identity@example.com",
     },
     select: { id: true },
   });
   const visitor = await prisma.visitor.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       anonId: "anon-identity-001",
     },
     select: { id: true },
@@ -125,6 +162,7 @@ test("lead_identities composite key enforces uniqueness", async () => {
 
   await prisma.leadIdentity.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       leadId: lead.id,
       visitorId: visitor.id,
       linkSource: LinkSource.form_submit,
@@ -132,9 +170,11 @@ test("lead_identities composite key enforces uniqueness", async () => {
     },
   });
 
+  // Duplicate in same tenant should fail
   await assert.rejects(
     prisma.leadIdentity.create({
       data: {
+        tenantId: TEST_TENANT_ID,
         leadId: lead.id,
         visitorId: visitor.id,
         linkSource: LinkSource.form_submit,
@@ -147,15 +187,17 @@ test("lead_identities composite key enforces uniqueness", async () => {
   );
 });
 
-test("events.dedupe_key enforces uniqueness when populated", async () => {
+test("events.dedupe_key enforces uniqueness per tenant", async () => {
   const visitor = await prisma.visitor.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       anonId: "anon-dedupe-visitor-001",
     },
     select: { id: true },
   });
   const session = await prisma.session.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitor.id,
       startedAt: new Date("2026-02-14T00:00:00.000Z"),
       lastEventAt: new Date("2026-02-14T00:00:00.000Z"),
@@ -163,25 +205,29 @@ test("events.dedupe_key enforces uniqueness when populated", async () => {
     select: { id: true },
   });
 
+  const dedupeKey =
+    "beecf3f3f96d96f581af596f4f8fc4a000ea5d0302fb05501858be3349f7ebf7";
+
   await prisma.event.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitor.id,
       sessionId: session.id,
-      dedupeKey:
-        "beecf3f3f96d96f581af596f4f8fc4a000ea5d0302fb05501858be3349f7ebf7",
+      dedupeKey,
       eventType: "page_view",
       path: "/",
       timestamp: new Date("2026-02-14T00:00:00.000Z"),
     },
   });
 
+  // Duplicate in same tenant should fail
   await assert.rejects(
     prisma.event.create({
       data: {
+        tenantId: TEST_TENANT_ID,
         visitorId: visitor.id,
         sessionId: session.id,
-        dedupeKey:
-          "beecf3f3f96d96f581af596f4f8fc4a000ea5d0302fb05501858be3349f7ebf7",
+        dedupeKey,
         eventType: "page_view",
         path: "/",
         timestamp: new Date("2026-02-14T00:00:01.000Z"),
@@ -191,4 +237,23 @@ test("events.dedupe_key enforces uniqueness when populated", async () => {
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002",
   );
+
+  // Same dedupeKey in different tenant should succeed
+  const otherVisitor = await prisma.visitor.create({
+    data: {
+      tenantId: OTHER_TENANT_ID,
+      anonId: "anon-dedupe-visitor-other",
+    },
+  });
+
+  await prisma.event.create({
+    data: {
+      tenantId: OTHER_TENANT_ID,
+      visitorId: otherVisitor.id,
+      dedupeKey,
+      eventType: "page_view",
+      path: "/",
+      timestamp: new Date("2026-02-14T00:00:00.000Z"),
+    },
+  });
 });

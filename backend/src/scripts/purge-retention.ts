@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { pool, query, sql } from "../lib/db.js";
+import { pool, query, sql, withOwnerRole } from "../lib/db.js";
 import { tableRef } from "../lib/sql.js";
 
 const RAW_EVENT_RETENTION_DAYS = 90;
@@ -12,8 +12,7 @@ const run = async (): Promise<void> => {
     Date.now() - RAW_EVENT_RETENTION_DAYS * 24 * 60 * 60 * 1000,
   );
 
-  const client = await pool.connect();
-  try {
+  await withOwnerRole(async (client) => {
     const { rows: eventRows } = await query<{ count: number }>(
       client,
       sql`
@@ -67,9 +66,7 @@ const run = async (): Promise<void> => {
       "ℹ️ Raw IP retention is not applicable because only hashed IP values are stored.",
     );
     console.log(`ℹ️ Privacy contact: ${env.PRIVACY_CONTACT_EMAIL}`);
-  } finally {
-    client.release();
-  }
+  });
 };
 
 void run()

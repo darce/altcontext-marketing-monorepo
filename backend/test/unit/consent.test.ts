@@ -9,6 +9,8 @@ import {
   toConsentStatus,
 } from "../../src/services/consent.js";
 
+const TEST_TENANT_ID = "00000000-0000-4000-a000-000000000001";
+
 test("toConsentStatus maps explicit values and defaults to pending", () => {
   assert.equal(toConsentStatus(undefined), ConsentStatus.pending);
   assert.equal(toConsentStatus("pending"), ConsentStatus.pending);
@@ -41,6 +43,7 @@ test("applyConsentStatus updates lead status when changed and writes audit event
 
   await applyConsentStatus(
     tx,
+    TEST_TENANT_ID,
     "lead-1",
     ConsentStatus.express,
     "form_submit",
@@ -77,6 +80,7 @@ test("applyConsentStatus does not update lead when status is unchanged", async (
 
   await applyConsentStatus(
     tx,
+    TEST_TENANT_ID,
     "lead-1",
     ConsentStatus.withdrawn,
     "unsubscribe",
@@ -109,6 +113,7 @@ test("applyConsentStatus no-ops when lead does not exist", async () => {
 
   await applyConsentStatus(
     tx,
+    TEST_TENANT_ID,
     "missing-lead",
     ConsentStatus.pending,
     "unknown",

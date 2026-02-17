@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 
 import { assertAdminRequest } from "../lib/admin-auth.js";
-import { transaction } from "../lib/db.js";
+import { withTenant } from "../lib/db.js";
 import { requestContextFrom } from "../lib/request-context.js";
 import {
   deleteByEmailBodySchema,
@@ -53,8 +53,8 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
         return reply.code(202).send({ ok: true });
       }
 
-      const result = await transaction((tx) =>
-        captureLead(tx, body, requestContextFrom(request)),
+      const result = await withTenant(request.tenantId, (tx) =>
+        captureLead(tx, request.tenantId, body, requestContextFrom(request)),
       );
 
       if (isFormUrlEncoded(request.headers["content-type"])) {
@@ -77,8 +77,13 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
     },
     async (request, reply) => {
       const body = unsubscribeBodySchema.parse(request.body);
-      const result = await transaction((tx) =>
-        unsubscribeLead(tx, body.email, requestContextFrom(request)),
+      const result = await withTenant(request.tenantId, (tx) =>
+        unsubscribeLead(
+          tx,
+          request.tenantId,
+          body.email,
+          requestContextFrom(request),
+        ),
       );
       if (!result.found) {
         return reply.code(404).send({ ok: false, error: "not_found" });
@@ -103,8 +108,8 @@ export const leadRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const body = deleteByEmailBodySchema.parse(request.body);
-      const result = await transaction((tx) =>
-        deleteLeadByEmail(tx, body.email),
+      const result = await withTenant(request.tenantId, (tx) =>
+        deleteLeadByEmail(tx, request.tenantId, body.email),
       );
       if (!result.deleted) {
         return reply.code(404).send({ ok: false, error: "not_found" });

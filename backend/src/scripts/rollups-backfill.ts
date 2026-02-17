@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { pool } from "../lib/db.js";
+import { pool, withOwnerRole } from "../lib/db.js";
 import { parseRollupCliArgs, getRollupConfig } from "./lib/rollup-cli.js";
 import { formatIsoDay } from "../schemas/metrics.js";
 import { tryRefreshMetricsMaterializedView } from "../services/metrics/materialized-view.js";
@@ -9,30 +9,24 @@ const run = async (): Promise<void> => {
   const args = parseRollupCliArgs(process.argv.slice(2));
 
   const { from, to, propertyId } = getRollupConfig(args);
+  const tenantId =
+    env.BOOTSTRAP_TENANT_ID ?? "00000000-0000-4000-a000-000000000001";
 
-  const client = await pool.connect();
-  let result;
-  try {
-    result = await rollupDateRange(client, {
+  const result = await withOwnerRole((client) =>
+    rollupDateRange(client, {
+      tenantId,
       from,
       to,
       propertyId,
       batchSize: env.ROLLUP_BATCH_DAYS,
-    });
-  } finally {
-    client.release();
-  }
+    }),
+  );
 
   console.log(
     `✅ Rolled up ${result.dayCount} day(s) for property ${result.propertyId}: ${formatIsoDay(from)} -> ${formatIsoDay(to)}`,
   );
 
-  const refreshClient = await pool.connect();
-  try {
-    await tryRefreshMetricsMaterializedView(refreshClient);
-  } finally {
-    refreshClient.release();
-  }
+  await withOwnerRole((client) => tryRefreshMetricsMaterializedView(client));
 };
 
 void run()

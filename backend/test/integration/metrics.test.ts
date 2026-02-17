@@ -7,9 +7,13 @@ import type { FastifyInstance } from "fastify";
 import { createApp } from "../../src/app.js";
 import { env } from "../../src/config/env.js";
 import { prisma } from "../helpers/prisma.js";
-import { closeDatabase, resetDatabase } from "../helpers/db.js";
+import {
+  closeDatabase,
+  resetDatabase,
+  TEST_ADMIN_KEY,
+  TEST_TENANT_ID,
+} from "../helpers/db.js";
 
-const TEST_ADMIN_KEY = "0123456789abcdef01234567";
 const originalAdminKey = env.ADMIN_API_KEY;
 const originalCacheTtlMs = env.METRICS_SUMMARY_CACHE_TTL_MS;
 const originalCacheMaxEntries = env.METRICS_SUMMARY_CACHE_MAX_ENTRIES;
@@ -69,6 +73,7 @@ const seedRollups = async (): Promise<void> => {
       const day = new Date(`${row.day}T00:00:00.000Z`);
       await prisma.dailyMetricRollup.create({
         data: {
+          tenantId: TEST_TENANT_ID,
           propertyId,
           day,
           uniqueVisitors: row.uniqueVisitors,
@@ -94,6 +99,7 @@ const seedRollups = async (): Promise<void> => {
 
       await prisma.dailyIngestRollup.create({
         data: {
+          tenantId: TEST_TENANT_ID,
           propertyId,
           day,
           eventsAccepted: row.totalPageViews,
@@ -121,6 +127,7 @@ const seedSequentialRollups = async (
   const metricRows = Array.from({ length: dayCount }, (_unused, index) => {
     const day = new Date(start.getTime() + index * 24 * 60 * 60 * 1000);
     return {
+      tenantId: TEST_TENANT_ID,
       propertyId,
       day,
       uniqueVisitors: 100 + index,
@@ -151,6 +158,7 @@ const seedSequentialRollups = async (
   });
 
   const ingestRows = metricRows.map((row, index) => ({
+    tenantId: TEST_TENANT_ID,
     propertyId: row.propertyId,
     day: row.day,
     eventsAccepted: row.totalPageViews,
@@ -179,7 +187,6 @@ before(async () => {
 
 beforeEach(async () => {
   await resetDatabase();
-  env.ADMIN_API_KEY = TEST_ADMIN_KEY;
   env.METRICS_SUMMARY_CACHE_TTL_MS = originalCacheTtlMs;
   env.METRICS_SUMMARY_CACHE_MAX_ENTRIES = originalCacheMaxEntries;
   env.METRICS_USE_MATERIALIZED_VIEW = originalUseMaterializedView;
@@ -194,7 +201,7 @@ after(async () => {
   await closeDatabase();
 });
 
-test("GET /v1/metrics/summary rejects missing or invalid admin key", async () => {
+test("GET /v1/metrics/summary rejects missing or invalid API key", async () => {
   const noKey = await app.inject({
     method: "GET",
     url: "/v1/metrics/summary?from=2026-01-10&to=2026-01-12",
@@ -205,25 +212,10 @@ test("GET /v1/metrics/summary rejects missing or invalid admin key", async () =>
     method: "GET",
     url: "/v1/metrics/summary?from=2026-01-10&to=2026-01-12",
     headers: {
-      "x-admin-key": "wrong-admin-key",
+      "x-api-key": "wrong-admin-key",
     },
   });
   assert.equal(wrongKey.statusCode, 401);
-});
-
-test("GET /v1/metrics/summary returns 503 when admin auth is not configured", async () => {
-  env.ADMIN_API_KEY = undefined;
-
-  const response = await app.inject({
-    method: "GET",
-    url: "/v1/metrics/summary?from=2026-01-10&to=2026-01-12",
-  });
-
-  assert.equal(response.statusCode, 503);
-  assert.equal(
-    response.json<{ ok: boolean; error: string }>().error,
-    "admin_auth_not_configured",
-  );
 });
 
 test("GET /v1/metrics/summary returns dashboard-ready summary with comparison deltas", async () => {
@@ -233,7 +225,7 @@ test("GET /v1/metrics/summary returns dashboard-ready summary with comparison de
     method: "GET",
     url: "/v1/metrics/summary?from=2026-01-10&to=2026-01-12&compareTo=true",
     headers: {
-      "x-admin-key": TEST_ADMIN_KEY,
+      "x-api-key": TEST_ADMIN_KEY,
     },
   });
 
@@ -304,7 +296,7 @@ test("GET /v1/metrics/summary returns zeroed metrics for empty windows", async (
     method: "GET",
     url: "/v1/metrics/summary?from=2026-04-01&to=2026-04-03",
     headers: {
-      "x-admin-key": TEST_ADMIN_KEY,
+      "x-api-key": TEST_ADMIN_KEY,
     },
   });
 
@@ -344,7 +336,7 @@ test("GET /v1/metrics/summary meets 30-day latency smoke budget", async () => {
     method: "GET",
     url: "/v1/metrics/summary?from=2026-03-01&to=2026-03-30",
     headers: {
-      "x-admin-key": TEST_ADMIN_KEY,
+      "x-api-key": TEST_ADMIN_KEY,
     },
   });
   const elapsedMs = performance.now() - startedAt;
@@ -370,7 +362,7 @@ test("GET /v1/metrics/summary uses cache for hot windows when enabled", async ()
     method: "GET",
     url: "/v1/metrics/summary?from=2026-01-10&to=2026-01-12",
     headers: {
-      "x-admin-key": TEST_ADMIN_KEY,
+      "x-api-key": TEST_ADMIN_KEY,
     },
   });
   assert.equal(firstResponse.statusCode, 200);
@@ -382,7 +374,8 @@ test("GET /v1/metrics/summary uses cache for hot windows when enabled", async ()
 
   await prisma.dailyMetricRollup.update({
     where: {
-      propertyId_day: {
+      tenantId_propertyId_day: {
+        tenantId: TEST_TENANT_ID,
         propertyId: env.ROLLUP_DEFAULT_PROPERTY_ID,
         day: new Date("2026-01-10T00:00:00.000Z"),
       },
@@ -396,7 +389,7 @@ test("GET /v1/metrics/summary uses cache for hot windows when enabled", async ()
     method: "GET",
     url: "/v1/metrics/summary?from=2026-01-10&to=2026-01-12",
     headers: {
-      "x-admin-key": TEST_ADMIN_KEY,
+      "x-api-key": TEST_ADMIN_KEY,
     },
   });
   assert.equal(cachedResponse.statusCode, 200);
@@ -413,7 +406,7 @@ test("GET /v1/metrics/summary uses cache for hot windows when enabled", async ()
     method: "GET",
     url: "/v1/metrics/summary?from=2026-01-10&to=2026-01-12",
     headers: {
-      "x-admin-key": TEST_ADMIN_KEY,
+      "x-api-key": TEST_ADMIN_KEY,
     },
   });
   assert.equal(uncachedResponse.statusCode, 200);
@@ -435,7 +428,7 @@ test("GET /v1/metrics/summary falls back to rollup tables when materialized view
     method: "GET",
     url: "/v1/metrics/summary?from=2026-01-10&to=2026-01-12",
     headers: {
-      "x-admin-key": TEST_ADMIN_KEY,
+      "x-api-key": TEST_ADMIN_KEY,
     },
   });
 

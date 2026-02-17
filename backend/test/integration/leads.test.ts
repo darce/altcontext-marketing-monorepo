@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 
 import { createApp } from "../../src/app.js";
-import { closeDatabase, resetDatabase } from "../helpers/db.js";
+import {
+  closeDatabase,
+  resetDatabase,
+  TEST_INGEST_KEY,
+} from "../helpers/db.js";
 import { prisma } from "../helpers/prisma.js";
 
 let app: Awaited<ReturnType<typeof createApp>>;
@@ -34,6 +38,7 @@ test("POST /v1/leads/capture creates a new lead", async () => {
     method: "POST",
     url: "/v1/leads/capture",
     payload,
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(res.statusCode, 200);
@@ -59,6 +64,7 @@ test("POST /v1/leads/capture updates existing lead (dedupe)", async () => {
       anonId: "anon-visitor-001",
       sourceChannel: "initial",
     },
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   // Second capture with same email
@@ -70,6 +76,7 @@ test("POST /v1/leads/capture updates existing lead (dedupe)", async () => {
       anonId: "anon-visitor-002", // Different visitor
       sourceChannel: "updated",
     },
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(res.statusCode, 200);
@@ -93,6 +100,7 @@ test("POST /v1/leads/capture handles honeypot", async () => {
     method: "POST",
     url: "/v1/leads/capture",
     payload,
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(res.statusCode, 202);
@@ -112,6 +120,7 @@ test("POST /v1/leads/capture rejects invalid email", async () => {
     method: "POST",
     url: "/v1/leads/capture",
     payload,
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(res.statusCode, 400);

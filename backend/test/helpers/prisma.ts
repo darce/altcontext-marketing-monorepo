@@ -1,6 +1,9 @@
+import { config as loadEnv } from "dotenv";
 import { Pool } from "pg";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+
+loadEnv();
 
 // Test-only Prisma client instance using pg adapter.
 // Required because driverAdapters preview feature is enabled in schema.

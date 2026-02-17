@@ -6,6 +6,7 @@
 #   make deploy         → build + fly deploy + verify health
 #   make ci             → quality gates (typecheck + lint + format)
 #   make db-*           → database lifecycle (start, stop, migrate, seed, studio)
+#   make db-seed-baseline → seed retention/rollup smoke-test baseline data
 #
 # Prerequisites (Homebrew): flyctl, postgresql@17, node (via fnm)
 
@@ -75,7 +76,7 @@ test: install db-start db-create ## Run backend tests against isolated schema
 # ---------------------------------------------------------------------------
 # Database lifecycle (local Postgres)
 # ---------------------------------------------------------------------------
-.PHONY: db-init db-start db-stop db-status db-create db-destroy db-reset db-studio
+.PHONY: db-init db-start db-stop db-status db-create db-destroy db-reset db-studio db-seed-baseline
 
 db-init:  ## Initialise a local Postgres data directory
 	@if [ ! -d "$(PG_DATA)" ]; then \
@@ -106,6 +107,9 @@ db-reset: db-destroy db-create migrate  ## Drop, recreate, and migrate
 
 db-studio: install  ## Open Prisma Studio
 	npm run db:studio
+
+db-seed-baseline: install db-start db-create migrate-deploy  ## Seed baseline visitor/session/event data for retention + rollup smoke tests
+	npm run seed:baseline
 
 # ---------------------------------------------------------------------------
 # Migrations (Prisma)

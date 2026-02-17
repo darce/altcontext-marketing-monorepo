@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 
 import { createApp } from "../../src/app.js";
-import { closeDatabase, resetDatabase } from "../helpers/db.js";
+import {
+  closeDatabase,
+  resetDatabase,
+  TEST_INGEST_KEY,
+  TEST_TENANT_ID,
+} from "../helpers/db.js";
 import { prisma } from "../helpers/prisma.js";
 import { ConsentStatus } from "../../src/lib/schema-enums.js";
 
@@ -27,6 +32,7 @@ test("POST /v1/leads/unsubscribe updates consent and logs event", async () => {
   const email = "unsubscribe-me@example.com";
   const lead = await prisma.lead.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       emailNormalized: email,
       consentStatus: ConsentStatus.express,
     },
@@ -37,6 +43,7 @@ test("POST /v1/leads/unsubscribe updates consent and logs event", async () => {
     method: "POST",
     url: "/v1/leads/unsubscribe",
     payload: { email },
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(res.statusCode, 200);
@@ -59,6 +66,7 @@ test("POST /v1/leads/unsubscribe returns 404 for nonexistent email", async () =>
     method: "POST",
     url: "/v1/leads/unsubscribe",
     payload: { email: "nonexistent@example.com" },
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(res.statusCode, 404);

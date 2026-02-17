@@ -3,13 +3,15 @@ import { after, before, beforeEach, test } from "node:test";
 import { randomUUID } from "node:crypto";
 
 import { env } from "../../src/config/env.js";
-import { pool, query, sql } from "../../src/lib/db.js";
+import { pool, query, sql, withTenant } from "../../src/lib/db.js";
 import { tableRef } from "../../src/lib/sql.js";
 import { ensureVisitorSession } from "../../src/services/visitors.js";
 import { resetDatabase } from "../helpers/db.js";
 
 const VISITORS_TABLE = tableRef("visitors");
 const SESSIONS_TABLE = tableRef("sessions");
+
+const TEST_TENANT_ID = "00000000-0000-4000-a000-000000000001";
 
 const mockContext = {
   ipHash: "test-ip-hash",
@@ -32,12 +34,12 @@ after(async () => {
 });
 
 test("ensureVisitorSession creates a new visitor and session on first see", async () => {
-  const client = await pool.connect();
-  try {
+  await withTenant(TEST_TENANT_ID, async (client) => {
     const anonId = "anon-123";
     const occurredAt = new Date();
 
     const { visitor, session } = await ensureVisitorSession(client, {
+      tenantId: TEST_TENANT_ID,
       anonId,
       occurredAt,
       request: mockContext,
@@ -53,27 +55,25 @@ test("ensureVisitorSession creates a new visitor and session on first see", asyn
     // Verify DB
     const { rows: vRows } = await query(
       client,
-      sql`SELECT * FROM ${VISITORS_TABLE} WHERE "id" = ${visitor.id}`,
+      sql`SELECT * FROM ${VISITORS_TABLE} WHERE "tenant_id" = ${TEST_TENANT_ID} AND "id" = ${visitor.id}`,
     );
     const { rows: sRows } = await query(
       client,
-      sql`SELECT * FROM ${SESSIONS_TABLE} WHERE "id" = ${session.id}`,
+      sql`SELECT * FROM ${SESSIONS_TABLE} WHERE "tenant_id" = ${TEST_TENANT_ID} AND "id" = ${session.id}`,
     );
     assert.ok(vRows[0]);
     assert.ok(sRows[0]);
-  } finally {
-    client.release();
-  }
+  });
 });
 
 test("ensureVisitorSession starts a new session after inactivity timeout", async () => {
-  const client = await pool.connect();
-  try {
+  await withTenant(TEST_TENANT_ID, async (client) => {
     const anonId = "anon-timeout";
     const firstOccurredAt = new Date("2026-02-16T10:00:00Z");
 
     // 1. Initial session
     const { session: session1 } = await ensureVisitorSession(client, {
+      tenantId: TEST_TENANT_ID,
       anonId,
       occurredAt: firstOccurredAt,
       request: mockContext,
@@ -84,6 +84,7 @@ test("ensureVisitorSession starts a new session after inactivity timeout", async
       firstOccurredAt.getTime() + 31 * 60 * 1000,
     );
     const { session: session2 } = await ensureVisitorSession(client, {
+      tenantId: TEST_TENANT_ID,
       anonId,
       occurredAt: secondOccurredAt,
       request: mockContext,
@@ -94,7 +95,7 @@ test("ensureVisitorSession starts a new session after inactivity timeout", async
     // Verify first session was ended
     const { rows: s1Rows } = await query<any>(
       client,
-      sql`SELECT * FROM ${SESSIONS_TABLE} WHERE "id" = ${session1.id}`,
+      sql`SELECT * FROM ${SESSIONS_TABLE} WHERE "tenant_id" = ${TEST_TENANT_ID} AND "id" = ${session1.id}`,
     );
     const endedSession1 = s1Rows[0];
     assert.ok(endedSession1?.ended_at);
@@ -102,18 +103,16 @@ test("ensureVisitorSession starts a new session after inactivity timeout", async
       new Date(endedSession1.ended_at).getTime(),
       firstOccurredAt.getTime(),
     );
-  } finally {
-    client.release();
-  }
+  });
 });
 
 test("ensureVisitorSession rotates session on UTM change", async () => {
-  const client = await pool.connect();
-  try {
+  await withTenant(TEST_TENANT_ID, async (client) => {
     const anonId = "anon-utm";
 
     // 1. Session with UTM source 'google'
     const { session: session1 } = await ensureVisitorSession(client, {
+      tenantId: TEST_TENANT_ID,
       anonId,
       occurredAt: new Date(),
       request: mockContext,
@@ -122,6 +121,7 @@ test("ensureVisitorSession rotates session on UTM change", async () => {
 
     // 2. Session with UTM source 'bing' (same visitor, no timeout)
     const { session: session2 } = await ensureVisitorSession(client, {
+      tenantId: TEST_TENANT_ID,
       anonId,
       occurredAt: new Date(),
       request: mockContext,
@@ -130,18 +130,16 @@ test("ensureVisitorSession rotates session on UTM change", async () => {
 
     assert.notEqual(session1.id, session2.id);
     assert.equal(session2.utmSource, "bing");
-  } finally {
-    client.release();
-  }
+  });
 });
 
 test("ensureVisitorSession updates existing session within activity window", async () => {
-  const client = await pool.connect();
-  try {
+  await withTenant(TEST_TENANT_ID, async (client) => {
     const anonId = "anon-active";
     const firstTime = new Date();
 
     const { session: session1 } = await ensureVisitorSession(client, {
+      tenantId: TEST_TENANT_ID,
       anonId,
       occurredAt: firstTime,
       request: mockContext,
@@ -149,6 +147,7 @@ test("ensureVisitorSession updates existing session within activity window", asy
 
     const secondTime = new Date(firstTime.getTime() + 5 * 60 * 1000); // 5 mins later
     const { session: session2 } = await ensureVisitorSession(client, {
+      tenantId: TEST_TENANT_ID,
       anonId,
       occurredAt: secondTime,
       request: mockContext,
@@ -156,7 +155,5 @@ test("ensureVisitorSession updates existing session within activity window", asy
 
     assert.equal(session1.id, session2.id);
     assert.equal(session2.lastEventAt.getTime(), secondTime.getTime());
-  } finally {
-    client.release();
-  }
+  });
 });

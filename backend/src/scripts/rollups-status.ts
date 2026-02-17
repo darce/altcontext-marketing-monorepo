@@ -1,5 +1,5 @@
 import { env } from "../config/env.js";
-import { pool, query, sql } from "../lib/db.js";
+import { pool, query, sql, withOwnerRole } from "../lib/db.js";
 import { tableRef } from "../lib/sql.js";
 import { getRollupFreshness } from "../services/metrics/rollups.js";
 
@@ -22,10 +22,11 @@ const parsePropertyId = (argv: string[]): string => {
 
 const run = async (): Promise<void> => {
   const propertyId = parsePropertyId(process.argv.slice(2));
-  const client = await pool.connect();
+  const tenantId =
+    env.BOOTSTRAP_TENANT_ID ?? "00000000-0000-4000-a000-000000000001";
 
-  try {
-    const freshness = await getRollupFreshness(client, propertyId);
+  await withOwnerRole(async (client) => {
+    const freshness = await getRollupFreshness(client, tenantId, propertyId);
 
     const { rows: metricRows } = await query<{ count: number }>(
       client,
@@ -46,9 +47,7 @@ const run = async (): Promise<void> => {
       `rolledUpThrough: ${freshness.rolledUpThrough ?? "none"} (lagDays=${freshness.lagDays ?? "n/a"})`,
     );
     console.log(`generatedAt: ${freshness.generatedAt ?? "n/a"}`);
-  } finally {
-    client.release();
-  }
+  });
 };
 
 void run()

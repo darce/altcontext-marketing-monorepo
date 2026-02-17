@@ -1,7 +1,7 @@
 import { env } from "../config/env.js";
 import { EVENT_INGEST_ENDPOINT } from "../lib/ingest-rejections.js";
 import { toInteger } from "../lib/coerce.js";
-import { emptySql, pool, query, sql } from "../lib/db.js";
+import { emptySql, pool, query, sql, withOwnerRole } from "../lib/db.js";
 import { tableRef } from "../lib/sql.js";
 import { addUtcDays, formatIsoDay, startOfUtcDay } from "../schemas/metrics.js";
 import { parseRollupCliArgs, getRollupConfig } from "./lib/rollup-cli.js";
@@ -68,22 +68,17 @@ const run = async (): Promise<void> => {
     ? emptySql()
     : sql`AND e."property_id" = ${propertyId}`;
 
-  const client = await pool.connect();
-  let rawEventsRows: RawEventsRow[];
-  let rawRejectionRows: RawRejectionsRow[];
-  let rawPageViewsRows: RawPageViewsRow[];
-  let rollupRows: RollupRow[];
-
-  try {
-    [
-      { rows: rawEventsRows },
-      { rows: rawRejectionRows },
-      { rows: rawPageViewsRows },
-      { rows: rollupRows },
-    ] = await Promise.all([
-      query<RawEventsRow>(
-        client,
-        sql`
+  const [rawEventsRows, rawRejectionRows, rawPageViewsRows, rollupRows] =
+    await withOwnerRole(async (client) => {
+      const [
+        { rows: rawEventsRows },
+        { rows: rawRejectionRows },
+        { rows: rawPageViewsRows },
+        { rows: rollupRows },
+      ] = await Promise.all([
+        query<RawEventsRow>(
+          client,
+          sql`
         SELECT
           DATE_TRUNC('day', e."timestamp")::date AS day,
           COUNT(*)::int AS raw_events_accepted
@@ -93,10 +88,10 @@ const run = async (): Promise<void> => {
           ${eventPropertyFilter}
         GROUP BY DATE_TRUNC('day', e."timestamp")::date
       `,
-      ),
-      query<RawRejectionsRow>(
-        client,
-        sql`
+        ),
+        query<RawRejectionsRow>(
+          client,
+          sql`
         SELECT
           DATE_TRUNC('day', r."occurred_at")::date AS day,
           COUNT(*) FILTER (WHERE r."endpoint" = ${EVENT_INGEST_ENDPOINT})::int AS raw_events_rejected
@@ -106,10 +101,10 @@ const run = async (): Promise<void> => {
           AND r."occurred_at" < ${toExclusive}
         GROUP BY DATE_TRUNC('day', r."occurred_at")::date
       `,
-      ),
-      query<RawPageViewsRow>(
-        client,
-        sql`
+        ),
+        query<RawPageViewsRow>(
+          client,
+          sql`
         SELECT
           DATE_TRUNC('day', e."timestamp")::date AS day,
           COUNT(*) FILTER (WHERE e."event_type" = 'page_view')::int AS raw_page_views
@@ -119,10 +114,10 @@ const run = async (): Promise<void> => {
           AND e."timestamp" < ${toExclusive}
         GROUP BY DATE_TRUNC('day', e."timestamp")::date
       `,
-      ),
-      query<RollupRow>(
-        client,
-        sql`
+        ),
+        query<RollupRow>(
+          client,
+          sql`
         SELECT
           m."day"::date AS day,
           COALESCE(i."events_accepted", 0)::int AS rollup_events_accepted,
@@ -136,11 +131,11 @@ const run = async (): Promise<void> => {
           AND m."day" >= ${from}
           AND m."day" <= ${to}
       `,
-      ),
-    ]);
-  } finally {
-    client.release();
-  }
+        ),
+      ]);
+
+      return [rawEventsRows, rawRejectionRows, rawPageViewsRows, rollupRows];
+    });
 
   const rawEventsByDay = new Map(
     rawEventsRows.map((row) => [

@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 
 import { createApp } from "../../src/app.js";
-import { closeDatabase, resetDatabase } from "../helpers/db.js";
+import {
+  closeDatabase,
+  resetDatabase,
+  TEST_INGEST_KEY,
+} from "../helpers/db.js";
 import { prisma } from "../helpers/prisma.js";
 
 let app: Awaited<ReturnType<typeof createApp>>;
@@ -41,6 +45,7 @@ test("POST /v1/events accepts valid event and persists it", async () => {
     method: "POST",
     url: "/v1/events",
     payload,
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(res.statusCode, 202);
@@ -68,6 +73,7 @@ test("POST /v1/events rejects invalid payload", async () => {
     method: "POST",
     url: "/v1/events",
     payload,
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(res.statusCode, 400);
@@ -88,6 +94,7 @@ test("POST /v1/events silent success for honeypot", async () => {
     method: "POST",
     url: "/v1/events",
     payload,
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   // Should return 202 Accepted (fake success)
@@ -100,7 +107,7 @@ test("POST /v1/events silent success for honeypot", async () => {
   assert.equal(count, 0);
 });
 
-test("POST /v1/events rate limit exceeded", async () => {
+test("[slow-rate-limit] POST /v1/events rate limit exceeded", async () => {
   const payload = {
     anonId: "anon-rate-limit-test",
     eventType: "page_view",
@@ -108,12 +115,12 @@ test("POST /v1/events rate limit exceeded", async () => {
   };
 
   // Route has max: 180 in events.ts. Inject 200 requests quickly.
-  // We use a for loop with inject to simulate rapid requests.
   for (let i = 0; i < 200; i++) {
     await app.inject({
       method: "POST",
       url: "/v1/events",
       payload,
+      headers: { "x-api-key": TEST_INGEST_KEY },
     });
   }
 
@@ -122,6 +129,7 @@ test("POST /v1/events rate limit exceeded", async () => {
     method: "POST",
     url: "/v1/events",
     payload,
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(res.statusCode, 429);

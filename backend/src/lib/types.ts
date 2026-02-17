@@ -10,6 +10,7 @@ export type JsonValue =
 
 export interface Visitor {
   id: string;
+  tenantId: string;
   anonId: string;
   firstSeenAt: Date;
   lastSeenAt: Date;
@@ -23,6 +24,7 @@ export interface Visitor {
 
 export interface Session {
   id: string;
+  tenantId: string;
   visitorId: string;
   startedAt: Date;
   endedAt: Date | null;
@@ -40,6 +42,7 @@ export interface Session {
 
 export interface Lead {
   id: string;
+  tenantId: string;
   emailNormalized: string;
   emailDomain: string | null;
   consentStatus: ConsentStatus;

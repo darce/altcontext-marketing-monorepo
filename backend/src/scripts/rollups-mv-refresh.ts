@@ -1,11 +1,11 @@
-import { pool, transaction } from "../lib/db.js";
+import { pool, withOwnerTransaction } from "../lib/db.js";
 import {
   isMaterializedViewMissingError,
   refreshMetricsMaterializedView,
 } from "../services/metrics/materialized-view.js";
 
 const run = async (): Promise<void> => {
-  await transaction(async (tx) => {
+  await withOwnerTransaction(async (tx) => {
     await refreshMetricsMaterializedView(tx);
   });
   console.log("✅ Materialized view refreshed.");

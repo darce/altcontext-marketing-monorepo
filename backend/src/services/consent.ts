@@ -34,6 +34,7 @@ export const toConsentStatus = (
 
 export const applyConsentStatus = async (
   tx: PoolClient,
+  tenantId: string,
   leadId: string,
   nextStatus: ConsentStatus,
   source: string,
@@ -48,7 +49,8 @@ export const applyConsentStatus = async (
       sql`
         SELECT "consent_status"
         FROM ${LEADS_TABLE}
-        WHERE "id" = ${leadId}
+        WHERE "tenant_id" = ${tenantId}
+          AND "id" = ${leadId}
       `,
     );
     if (rows.length === 0) {
@@ -73,7 +75,8 @@ export const applyConsentStatus = async (
       sql`
         UPDATE ${LEADS_TABLE}
         SET "consent_status" = ${nextStatus}
-        WHERE "id" = ${leadId}
+        WHERE "tenant_id" = ${tenantId}
+          AND "id" = ${leadId}
       `,
     );
   }
@@ -83,12 +86,14 @@ export const applyConsentStatus = async (
     sql`
       INSERT INTO ${CONSENT_EVENTS_TABLE} (
         "id",
+        "tenant_id",
         "lead_id",
         "status",
         "source",
         "ip_hash"
       ) VALUES (
         ${randomUUID()},
+        ${tenantId},
         ${leadId},
         ${nextStatus},
         ${source},

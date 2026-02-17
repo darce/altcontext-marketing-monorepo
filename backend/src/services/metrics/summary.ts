@@ -305,6 +305,7 @@ const toMetricRowsFromView = (
 
 const fetchWindowRowsFromRollups = async (
   tx: PoolClient,
+  tenantId: string,
   propertyId: string,
   from: Date,
   to: Date,
@@ -330,7 +331,8 @@ const fetchWindowRowsFromRollups = async (
           "time_to_first_capture_count" AS "timeToFirstCaptureCount",
           "traffic_source_breakdown" AS "trafficSourceBreakdown"
         FROM ${METRICS_ROLLUP_TABLE}
-        WHERE "property_id" = ${propertyId}
+        WHERE "tenant_id" = ${tenantId}
+          AND "property_id" = ${propertyId}
           AND "day" >= ${from}
           AND "day" <= ${to}
         ORDER BY "day" ASC
@@ -345,7 +347,8 @@ const fetchWindowRowsFromRollups = async (
           "events_rejected" AS "eventsRejected",
           "p95_ttfb_ms" AS "p95TtfbMs"
         FROM ${INGEST_ROLLUP_TABLE}
-        WHERE "property_id" = ${propertyId}
+        WHERE "tenant_id" = ${tenantId}
+          AND "property_id" = ${propertyId}
           AND "day" >= ${from}
           AND "day" <= ${to}
         ORDER BY "day" ASC
@@ -389,6 +392,7 @@ const toIngestRowsFromView = (
 
 const fetchWindowRows = async (
   tx: PoolClient,
+  tenantId: string,
   propertyId: string,
   from: Date,
   to: Date,
@@ -397,15 +401,21 @@ const fetchWindowRows = async (
   ingestRows: IngestRollupRow[];
 }> => {
   if (!env.METRICS_USE_MATERIALIZED_VIEW) {
-    return fetchWindowRowsFromRollups(tx, propertyId, from, to);
+    return fetchWindowRowsFromRollups(tx, tenantId, propertyId, from, to);
   }
 
   const viewExists = await checkMaterializedViewExists(tx);
   if (!viewExists) {
-    return fetchWindowRowsFromRollups(tx, propertyId, from, to);
+    return fetchWindowRowsFromRollups(tx, tenantId, propertyId, from, to);
   }
 
-  const rows = await readMetricsMaterializedViewRows(tx, propertyId, from, to);
+  const rows = await readMetricsMaterializedViewRows(
+    tx,
+    tenantId,
+    propertyId,
+    from,
+    to,
+  );
   return {
     metricRows: toMetricRowsFromView(rows),
     ingestRows: toIngestRowsFromView(rows),
@@ -473,6 +483,7 @@ const writeSummaryCache = (key: string, value: MetricsSummary): void => {
 
 export const fetchMetricsSummary = async (
   tx: PoolClient,
+  tenantId: string,
   query: SummaryQuery,
 ): Promise<MetricsSummary> => {
   const cacheKey = buildSummaryCacheKey(query);
@@ -490,10 +501,10 @@ export const fetchMetricsSummary = async (
   const compareTo = addUtcDays(windowFrom, -1);
 
   const [currentRows, freshness, compareRows] = await Promise.all([
-    fetchWindowRows(tx, propertyId, windowFrom, windowTo),
-    getRollupFreshness(tx, propertyId),
+    fetchWindowRows(tx, tenantId, propertyId, windowFrom, windowTo),
+    getRollupFreshness(tx, tenantId, propertyId),
     query.compareTo
-      ? fetchWindowRows(tx, propertyId, compareFrom, compareTo)
+      ? fetchWindowRows(tx, tenantId, propertyId, compareFrom, compareTo)
       : Promise.resolve({
           metricRows: [],
           ingestRows: [],

@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from "fastify";
 
 import { assertAdminRequest } from "../lib/admin-auth.js";
-import { transaction } from "../lib/db.js";
+import { withTenant } from "../lib/db.js";
 import { summaryQuerySchema } from "../schemas/metrics.js";
 import { fetchMetricsSummary } from "../services/metrics/summary.js";
 
@@ -22,7 +22,9 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
       }
 
       const query = summaryQuerySchema.parse(request.query);
-      const summary = await transaction((tx) => fetchMetricsSummary(tx, query));
+      const summary = await withTenant(request.tenantId, (tx) =>
+        fetchMetricsSummary(tx, request.tenantId, query),
+      );
       return reply.code(200).send({
         ok: true,
         ...summary,

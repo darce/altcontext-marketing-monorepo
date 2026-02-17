@@ -11,6 +11,7 @@ const LEAD_IDENTITIES_TABLE = tableRef("lead_identities");
 
 export const linkLeadToVisitor = async (
   tx: PoolClient,
+  tenantId: string,
   leadId: string,
   visitorId: string,
   linkSource: LinkSource,
@@ -25,7 +26,8 @@ export const linkLeadToVisitor = async (
     sql`
       SELECT "id", "confidence", "link_source"
       FROM ${LEAD_IDENTITIES_TABLE}
-      WHERE "lead_id" = ${leadId}
+      WHERE "tenant_id" = ${tenantId}
+        AND "lead_id" = ${leadId}
         AND "visitor_id" = ${visitorId}
         AND "link_source" = ${linkSource}
       LIMIT 1
@@ -55,12 +57,14 @@ export const linkLeadToVisitor = async (
     sql`
       INSERT INTO ${LEAD_IDENTITIES_TABLE} (
         "id",
+        "tenant_id",
         "lead_id",
         "visitor_id",
         "link_source",
         "confidence"
       ) VALUES (
         ${randomUUID()},
+        ${tenantId},
         ${leadId},
         ${visitorId},
         ${linkSource},
@@ -72,6 +76,7 @@ export const linkLeadToVisitor = async (
 
 export const linkHeuristicVisitors = async (
   tx: PoolClient,
+  tenantId: string,
   leadId: string,
   primaryVisitorId: string,
   ipHash: string,
@@ -90,7 +95,8 @@ export const linkHeuristicVisitors = async (
     sql`
       SELECT "id"
       FROM ${VISITORS_TABLE}
-      WHERE "id" != ${primaryVisitorId}
+      WHERE "tenant_id" = ${tenantId}
+        AND "id" != ${primaryVisitorId}
         AND "last_seen_at" >= ${windowStart}
         AND "last_ip_hash" = ${ipHash}
         AND "last_ua_hash" = ${uaHash}
@@ -113,7 +119,8 @@ export const linkHeuristicVisitors = async (
       SET
         "confidence" = 0.35,
         "linked_at" = NOW()
-      WHERE "lead_id" = ${leadId}
+      WHERE "tenant_id" = ${tenantId}
+        AND "lead_id" = ${leadId}
         AND "link_source" = ${LinkSource.same_ip_ua_window}
         AND "visitor_id" = ANY(${candidateVisitorIds})
         AND "confidence" < 0.35
@@ -130,6 +137,7 @@ export const linkHeuristicVisitors = async (
     sql`
       INSERT INTO ${LEAD_IDENTITIES_TABLE} (
         "id",
+        "tenant_id",
         "lead_id",
         "visitor_id",
         "link_source",
@@ -137,12 +145,13 @@ export const linkHeuristicVisitors = async (
       )
       SELECT
         l_id,
+        ${tenantId},
         ${leadId},
         v_id,
         ${LinkSource.same_ip_ua_window},
         0.35
       FROM UNNEST(${linkIds}::uuid[], ${candidateVisitorIds}::text[]) AS t(l_id, v_id)
-      ON CONFLICT DO NOTHING
+      ON CONFLICT ("tenant_id", "lead_id", "visitor_id", "link_source") DO NOTHING
     `,
   );
 

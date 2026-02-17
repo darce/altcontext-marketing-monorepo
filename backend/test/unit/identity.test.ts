@@ -6,6 +6,8 @@ import {
   linkLeadToVisitor,
 } from "../../src/services/identity.js";
 
+const TEST_TENANT_ID = "00000000-0000-4000-a000-000000000001";
+
 // Mock pg.PoolClient
 const createMockTx = (
   queryHandler: (text: string, values: any[]) => Promise<any>,
@@ -44,6 +46,7 @@ test("linkLeadToVisitor does not overwrite stronger confidence", async () => {
 
   await linkLeadToVisitor(
     tx,
+    TEST_TENANT_ID,
     "lead-1",
     "visitor-1",
     LinkSource.form_submit,
@@ -69,16 +72,30 @@ test("linkLeadToVisitor updates weaker existing confidence", async () => {
     // Mock UPDATE
     if (text.includes("UPDATE")) {
       // Extract confidence from values.
-      // Query: UPDATE ... SET "confidence" = $1 ... WHERE "id" = $2
+      // Query: UPDATE ... SET "confidence" = ${confidence}, "linked_at" = NOW() WHERE "id" = ${existing.id} AND "tenant_id" = ${tenantId}
       // Actually values order depends on sql definition.
-      // "confidence" = ${confidence}, "linked_at" = NOW() WHERE "id" = ${existing.id}
+      // Looking at identity.ts:
+      // sql`
+      //   UPDATE ${LEAD_IDENTITY_TABLE}
+      //   SET "confidence" = ${confidence},
+      //       "linked_at" = NOW()
+      //   WHERE "id" = ${existing.id}
+      //     AND "tenant_id" = ${tenantId}
+      // `
       updatedConfidence = values[0];
       return { rows: [] };
     }
     return { rows: [] };
   });
 
-  await linkLeadToVisitor(tx, "lead-1", "visitor-1", LinkSource.form_submit, 1);
+  await linkLeadToVisitor(
+    tx,
+    TEST_TENANT_ID,
+    "lead-1",
+    "visitor-1",
+    LinkSource.form_submit,
+    1,
+  );
 
   assert.equal(updatedConfidence, 1);
 });
@@ -107,9 +124,6 @@ test("linkHeuristicVisitors creates links for matching candidates", async () => 
     // Mock INSERT new links
     if (text.includes("INSERT INTO") && text.includes('"lead_identities"')) {
       insertManyCalled = true;
-      // The candidates array is passed in values.
-      // values index depends on query construction.
-      // FROM UNNEST(${candidateVisitorIds}::text[])
       // verify one of values is the array
       const candidates = values.find((v) => Array.isArray(v));
       if (candidates && candidates.includes("visitor-2")) {
@@ -123,6 +137,7 @@ test("linkHeuristicVisitors creates links for matching candidates", async () => 
 
   const count = await linkHeuristicVisitors(
     tx,
+    TEST_TENANT_ID,
     "lead-1",
     "visitor-1",
     "ip-hash",
@@ -132,6 +147,4 @@ test("linkHeuristicVisitors creates links for matching candidates", async () => 
   assert.equal(count, 2);
   assert.equal(updateManyCalled, true);
   assert.equal(insertManyCalled, true);
-  // We can't easily capture the precise inserted rows without parsing SQL/values deeply,
-  // but checking the mocked return count effectively verifies logic flow.
 });

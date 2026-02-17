@@ -2,12 +2,18 @@ import assert from "node:assert/strict";
 import { test, after, before } from "node:test";
 import { createApp } from "../../src/app.js";
 import { pool } from "../../src/lib/db.js";
+import { TEST_INGEST_KEY, resetDatabase } from "../helpers/db.js";
+
+before(async () => {
+  await resetDatabase();
+});
 
 test("error handling: Zod validation error -> 400", async () => {
   const app = await createApp();
   const response = await app.inject({
     method: "POST",
     url: "/v1/events",
+    headers: { "x-api-key": TEST_INGEST_KEY },
     payload: {
       // Empty payload should fail Zod validation
     },
@@ -30,6 +36,7 @@ test("error handling: 500 internal error", async () => {
   const response = await app.inject({
     method: "GET",
     url: "/test-error",
+    headers: { "x-api-key": TEST_INGEST_KEY },
   });
 
   assert.equal(response.statusCode, 500);
@@ -50,7 +57,6 @@ test("error handling: 404 for unknown route", async () => {
 
 test("CORS preflight: valid origin", async () => {
   const app = await createApp();
-  // We need to set CORS_ALLOWED_ORIGINS to include this for the test
   const response = await app.inject({
     method: "OPTIONS",
     url: "/v1/events",
@@ -73,11 +79,11 @@ test("CORS: unknown origin not reflected", async () => {
     method: "POST",
     url: "/v1/events",
     headers: {
+      "x-api-key": TEST_INGEST_KEY,
       origin: "https://evil.com",
     },
   });
 
-  // CORS plugin typically doesn't block the request but doesn't send the allow-origin header
   assert.notEqual(
     response.headers["access-control-allow-origin"],
     "https://evil.com",

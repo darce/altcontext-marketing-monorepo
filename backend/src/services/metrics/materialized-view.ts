@@ -61,6 +61,7 @@ export const ensureMetricsMaterializedView = async (
     sql`
     CREATE MATERIALIZED VIEW IF NOT EXISTS ${metricsViewTableRef} AS
       SELECT
+        m."tenant_id" AS tenant_id,
         m."property_id" AS property_id,
         m."day" AS day,
         m."unique_visitors" AS unique_visitors,
@@ -79,7 +80,8 @@ export const ensureMetricsMaterializedView = async (
         i."p95_ttfb_ms" AS p95_ttfb_ms
       FROM ${metricsRollupTableRef} m
       LEFT JOIN ${ingestRollupTableRef} i
-        ON i."property_id" = m."property_id"
+        ON i."tenant_id" = m."tenant_id"
+       AND i."property_id" = m."property_id"
        AND i."day" = m."day"
     WITH NO DATA
   `,
@@ -90,7 +92,7 @@ export const ensureMetricsMaterializedView = async (
   const viewName = quoteIdentifier(env.METRICS_MATERIALIZED_VIEW_NAME);
 
   const createIndexSql = rawSql(
-    `CREATE UNIQUE INDEX IF NOT EXISTS ${indexName} ON ${schemaName}.${viewName} (property_id, day)`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS ${indexName} ON ${schemaName}.${viewName} (tenant_id, property_id, day)`,
   );
 
   await query(tx, createIndexSql);
@@ -104,6 +106,7 @@ export const refreshMetricsMaterializedView = async (
 
 export const readMetricsMaterializedViewRows = async (
   tx: PoolClient,
+  tenantId: string,
   propertyId: string,
   from: Date,
   to: Date,
@@ -128,7 +131,8 @@ export const readMetricsMaterializedViewRows = async (
       events_rejected,
       p95_ttfb_ms
     FROM ${metricsViewTableRef}
-    WHERE property_id = ${propertyId}
+    WHERE tenant_id = ${tenantId}
+      AND property_id = ${propertyId}
       AND day >= ${from}
       AND day <= ${to}
     ORDER BY day ASC

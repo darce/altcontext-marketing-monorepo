@@ -57,6 +57,7 @@ const environmentSchema = z.object({
     .max(128)
     .default("metrics_daily_summary_mv"),
   PRIVACY_CONTACT_EMAIL: z.string().email().default("privacy@altcontext.local"),
+  BOOTSTRAP_TENANT_ID: z.string().uuid().optional(),
 });
 
 export type Environment = z.infer<typeof environmentSchema>;

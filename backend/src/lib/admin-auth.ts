@@ -32,11 +32,15 @@ export const assertAdminRequest = (
     return false;
   }
 
-  const requestKey = request.headers["x-admin-key"];
-  if (typeof requestKey !== "string" || !hasValidAdminKey(requestKey)) {
-    void reply.code(401).send({ ok: false, error: "unauthorized" });
-    return false;
+  if (request.apiKeyScope === "admin") {
+    return true;
   }
 
-  return true;
+  const requestKey = request.headers["x-admin-key"];
+  if (typeof requestKey === "string" && hasValidAdminKey(requestKey)) {
+    return true;
+  }
+
+  void reply.code(401).send({ ok: false, error: "unauthorized" });
+  return false;
 };

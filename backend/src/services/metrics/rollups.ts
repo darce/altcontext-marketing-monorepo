@@ -16,6 +16,7 @@ import {
 import { emptySql, query, sql, type SqlQuery } from "../../lib/db.js";
 
 export interface RollupDateRangeInput {
+  tenantId: string;
   from: Date;
   to: Date;
   propertyId?: string;
@@ -117,6 +118,7 @@ const buildDays = (from: Date, to: Date): Date[] => {
 
 const computeDailyMetrics = async (
   tx: PoolClient,
+  tenantId: string,
   dayStart: Date,
   propertyId: string,
 ): Promise<void> => {
@@ -134,7 +136,9 @@ const computeDailyMetrics = async (
           SELECT 1
           FROM ${LEAD_IDENTITIES_TABLE} li
           INNER JOIN ${EVENTS_TABLE} ev ON ev."visitor_id" = li."visitor_id"
-          WHERE li."lead_id" = l."id"
+          WHERE li."tenant_id" = l."tenant_id"
+            AND li."lead_id" = l."id"
+            AND ev."tenant_id" = l."tenant_id"
             AND ev."property_id" = ${propertyId}
             AND ev."timestamp" <= l."first_captured_at"
         )
@@ -146,7 +150,8 @@ const computeDailyMetrics = async (
         AND EXISTS (
           SELECT 1
           FROM ${EVENTS_TABLE} ev
-          WHERE ev."visitor_id" = li."visitor_id"
+          WHERE ev."tenant_id" = li."tenant_id"
+            AND ev."visitor_id" = li."visitor_id"
             AND ev."property_id" = ${propertyId}
             AND ev."timestamp" <= l."first_captured_at"
         )
@@ -158,7 +163,8 @@ const computeDailyMetrics = async (
         AND EXISTS (
           SELECT 1
           FROM ${EVENTS_TABLE} ev
-          WHERE ev."visitor_id" = fs."visitor_id"
+          WHERE ev."tenant_id" = fs."tenant_id"
+            AND ev."visitor_id" = fs."visitor_id"
             AND ev."property_id" = ${propertyId}
             AND ev."timestamp" <= fs."submitted_at"
         )
@@ -183,8 +189,9 @@ const computeDailyMetrics = async (
           COUNT(*) FILTER (WHERE e."is_exit")::int AS total_exits,
           COUNT(*) FILTER (WHERE e."is_conversion")::int AS total_conversions
         FROM ${EVENTS_TABLE} e
-        INNER JOIN ${VISITORS_TABLE} v ON v."id" = e."visitor_id"
-        WHERE e."timestamp" >= ${dayStart}
+        INNER JOIN ${VISITORS_TABLE} v ON v."id" = e."visitor_id" AND v."tenant_id" = e."tenant_id"
+        WHERE e."tenant_id" = ${tenantId}
+          AND e."timestamp" >= ${dayStart}
           AND e."timestamp" < ${dayEnd}
           ${eventPropertyFilter}
       `,
@@ -196,7 +203,8 @@ const computeDailyMetrics = async (
           COUNT(*) FILTER (WHERE e."event_type" = 'form_start')::int AS form_starts,
           COUNT(*) FILTER (WHERE e."event_type" = 'form_submit')::int AS form_submits
         FROM ${EVENTS_TABLE} e
-        WHERE e."timestamp" >= ${dayStart}
+        WHERE e."tenant_id" = ${tenantId}
+          AND e."timestamp" >= ${dayStart}
           AND e."timestamp" < ${dayEnd}
           ${eventPropertyFilter}
       `,
@@ -206,7 +214,8 @@ const computeDailyMetrics = async (
       sql`
         SELECT COUNT(*)::int AS new_leads
         FROM ${LEADS_TABLE} l
-        WHERE l."first_captured_at" >= ${dayStart}
+        WHERE l."tenant_id" = ${tenantId}
+          AND l."first_captured_at" >= ${dayStart}
           AND l."first_captured_at" < ${dayEnd}
           ${leadPropertyFilter}
       `,
@@ -220,9 +229,10 @@ const computeDailyMetrics = async (
             l."first_captured_at" AS first_captured_at,
             MIN(v."first_seen_at") AS first_seen_at
           FROM ${LEADS_TABLE} l
-          INNER JOIN ${LEAD_IDENTITIES_TABLE} li ON li."lead_id" = l."id"
-          INNER JOIN ${VISITORS_TABLE} v ON v."id" = li."visitor_id"
-          WHERE l."first_captured_at" >= ${dayStart}
+          INNER JOIN ${LEAD_IDENTITIES_TABLE} li ON li."lead_id" = l."id" AND li."tenant_id" = l."tenant_id"
+          INNER JOIN ${VISITORS_TABLE} v ON v."id" = li."visitor_id" AND v."tenant_id" = li."tenant_id"
+          WHERE l."tenant_id" = ${tenantId}
+            AND l."first_captured_at" >= ${dayStart}
             AND l."first_captured_at" < ${dayEnd}
             ${leadVisitorPropertyFilter}
           GROUP BY l."id", l."first_captured_at"
@@ -251,7 +261,8 @@ const computeDailyMetrics = async (
           e."traffic_source"::text AS source,
           COUNT(*)::int AS count
         FROM ${EVENTS_TABLE} e
-        WHERE e."timestamp" >= ${dayStart}
+        WHERE e."tenant_id" = ${tenantId}
+          AND e."timestamp" >= ${dayStart}
           AND e."timestamp" < ${dayEnd}
           ${eventPropertyFilter}
         GROUP BY e."traffic_source"
@@ -265,7 +276,8 @@ const computeDailyMetrics = async (
           COUNT(*)::int AS entrances,
           COUNT(*) FILTER (WHERE e."is_conversion")::int AS conversions
         FROM ${EVENTS_TABLE} e
-        WHERE e."timestamp" >= ${dayStart}
+        WHERE e."tenant_id" = ${tenantId}
+          AND e."timestamp" >= ${dayStart}
           AND e."timestamp" < ${dayEnd}
           AND e."is_entrance" = true
           ${eventPropertyFilter}
@@ -312,7 +324,8 @@ const computeDailyMetrics = async (
             ORDER BY (e."props"->>'ttfbMs')::int
           ))::int AS p95_ttfb_ms
         FROM ${EVENTS_TABLE} e
-        WHERE e."timestamp" >= ${dayStart}
+        WHERE e."tenant_id" = ${tenantId}
+          AND e."timestamp" >= ${dayStart}
           AND e."timestamp" < ${dayEnd}
           AND e."props"->>'ttfbMs' IS NOT NULL
           ${eventPropertyFilter}
@@ -325,7 +338,8 @@ const computeDailyMetrics = async (
           COUNT(*) FILTER (WHERE r."endpoint" = ${EVENT_INGEST_ENDPOINT})::int AS events_rejected,
           COUNT(*) FILTER (WHERE r."endpoint" = ${LEAD_INGEST_ENDPOINT})::int AS leads_rejected
         FROM ${INGEST_REJECTIONS_TABLE} r
-        WHERE r."occurred_at" >= ${dayStart}
+        WHERE r."tenant_id" = ${tenantId}
+          AND r."occurred_at" >= ${dayStart}
           AND r."occurred_at" < ${dayEnd}
           ${env.ROLLUP_DEFAULT_PROPERTY_ID ? sql`AND r."property_id" = ${propertyId}` : emptySql()} 
       `,
@@ -386,6 +400,7 @@ const computeDailyMetrics = async (
   const metricsInsertSql = sql`
         INSERT INTO ${METRICS_ROLLUP_TABLE} (
           "id",
+          "tenant_id",
           "property_id",
           "day",
           "unique_visitors",
@@ -405,6 +420,7 @@ const computeDailyMetrics = async (
           "updated_at"
         ) VALUES (
           ${crypto.randomUUID()},
+          ${tenantId},
           ${propertyId},
           ${dayStart},
           ${uniqueVisitors},
@@ -423,7 +439,7 @@ const computeDailyMetrics = async (
           NOW(),
           NOW()
         )
-        ON CONFLICT ("property_id", "day") DO UPDATE SET
+        ON CONFLICT ("tenant_id", "property_id", "day") DO UPDATE SET
           "unique_visitors" = EXCLUDED.unique_visitors,
           "returning_visitors" = EXCLUDED.returning_visitors,
           "total_page_views" = EXCLUDED.total_page_views,
@@ -444,6 +460,7 @@ const computeDailyMetrics = async (
   const ingestInsertSql = sql`
         INSERT INTO ${INGEST_ROLLUP_TABLE} (
           "id",
+          "tenant_id",
           "property_id",
           "day",
           "events_accepted",
@@ -456,6 +473,7 @@ const computeDailyMetrics = async (
           "updated_at"
         ) VALUES (
           ${crypto.randomUUID()},
+          ${tenantId},
           ${propertyId},
           ${dayStart},
           ${eventsAccepted},
@@ -467,7 +485,7 @@ const computeDailyMetrics = async (
           NOW(),
           NOW()
         )
-        ON CONFLICT ("property_id", "day") DO UPDATE SET
+        ON CONFLICT ("tenant_id", "property_id", "day") DO UPDATE SET
           "events_accepted" = EXCLUDED.events_accepted,
           "events_rejected" = EXCLUDED.events_rejected,
           "leads_accepted" = EXCLUDED.leads_accepted,
@@ -493,7 +511,7 @@ export const rollupDateRange = async (
     const batch = days.slice(index, index + batchSize);
     await Promise.all(
       batch.map(async (day) => {
-        await computeDailyMetrics(tx, day, propertyId);
+        await computeDailyMetrics(tx, input.tenantId, day, propertyId);
       }),
     );
   }
@@ -513,6 +531,7 @@ export interface RollupFreshness {
 
 export const getRollupFreshness = async (
   tx: PoolClient,
+  tenantId: string,
   propertyId: string,
 ): Promise<RollupFreshness> => {
   const { rows } = await query<{ day: Date; generated_at: Date }>(
@@ -520,7 +539,8 @@ export const getRollupFreshness = async (
     sql`
       SELECT "day", "generated_at"
       FROM ${METRICS_ROLLUP_TABLE}
-      WHERE "property_id" = ${propertyId}
+      WHERE "tenant_id" = ${tenantId}
+        AND "property_id" = ${propertyId}
       ORDER BY "day" DESC, "generated_at" DESC
       LIMIT 1
     `,

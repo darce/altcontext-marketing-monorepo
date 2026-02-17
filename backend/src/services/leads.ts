@@ -24,6 +24,7 @@ const FORM_SUBMISSIONS_TABLE = tableRef("form_submissions");
 // Mapper
 interface LeadRow {
   id: string;
+  tenant_id: string;
   email_normalized: string;
   email_domain: string | null;
   consent_status: ConsentStatus;
@@ -36,6 +37,7 @@ interface LeadRow {
 
 const mapLead = (row: LeadRow): LeadType => ({
   id: row.id,
+  tenantId: row.tenant_id,
   emailNormalized: row.email_normalized,
   emailDomain: row.email_domain,
   consentStatus: row.consent_status,
@@ -55,11 +57,13 @@ export interface LeadCaptureResult {
 
 export const captureLead = async (
   tx: PoolClient,
+  tenantId: string,
   body: LeadCaptureBody,
   context: RequestContext,
 ): Promise<LeadCaptureResult> => {
   const occurredAt = new Date();
   const { visitor, session } = await ensureVisitorSession(tx, {
+    tenantId,
     anonId: body.anonId,
     occurredAt,
     request: context,
@@ -79,6 +83,7 @@ export const captureLead = async (
     sql`
       INSERT INTO ${LEADS_TABLE} (
         "id",
+        "tenant_id",
         "email_normalized",
         "email_domain",
         "source_channel",
@@ -89,6 +94,7 @@ export const captureLead = async (
         "updated_at"
       ) VALUES (
         ${randomUUID()},
+        ${tenantId},
         ${emailNormalized},
         ${emailDomain},
         ${sourceChannel},
@@ -98,7 +104,7 @@ export const captureLead = async (
         NOW(),
         NOW()
       )
-      ON CONFLICT ("email_normalized") DO UPDATE SET
+      ON CONFLICT ("tenant_id", "email_normalized") DO UPDATE SET
         "email_domain" = ${emailDomain},
         "source_channel" = ${sourceChannel},
         "last_captured_at" = ${occurredAt},
@@ -113,6 +119,7 @@ export const captureLead = async (
   // [B2] call ingestEvent to ensure full enrichment (traffic source, device, dedupe, metrics)
   await ingestEvent(
     tx,
+    tenantId,
     {
       anonId: body.anonId,
       eventType: "form_submit",
@@ -132,9 +139,17 @@ export const captureLead = async (
   );
 
   const [, heuristicLinksCreated] = await Promise.all([
-    linkLeadToVisitor(tx, lead.id, visitor.id, LinkSource.form_submit, 1),
+    linkLeadToVisitor(
+      tx,
+      tenantId,
+      lead.id,
+      visitor.id,
+      LinkSource.form_submit,
+      1,
+    ),
     linkHeuristicVisitors(
       tx,
+      tenantId,
       lead.id,
       visitor.id,
       context.ipHash,
@@ -151,6 +166,7 @@ export const captureLead = async (
     sql`
       INSERT INTO ${FORM_SUBMISSIONS_TABLE} (
         "id",
+        "tenant_id",
         "lead_id",
         "visitor_id",
         "session_id",
@@ -161,6 +177,7 @@ export const captureLead = async (
         "created_at"
       ) VALUES (
         ${randomUUID()},
+        ${tenantId},
         ${lead.id},
         ${visitor.id},
         ${session.id},
@@ -175,6 +192,7 @@ export const captureLead = async (
 
   await applyConsentStatus(
     tx,
+    tenantId,
     lead.id,
     body.consentStatus
       ? toConsentStatus(body.consentStatus)
@@ -194,6 +212,7 @@ export const captureLead = async (
 
 export const unsubscribeLead = async (
   tx: PoolClient,
+  tenantId: string,
   email: string,
   context: RequestContext,
 ): Promise<{ found: boolean }> => {
@@ -203,7 +222,8 @@ export const unsubscribeLead = async (
     sql`
       SELECT "id", "consent_status"
       FROM ${LEADS_TABLE}
-      WHERE "email_normalized" = ${emailNormalized}
+      WHERE "tenant_id" = ${tenantId}
+        AND "email_normalized" = ${emailNormalized}
     `,
   );
   const lead = rows[0];
@@ -214,6 +234,7 @@ export const unsubscribeLead = async (
 
   await applyConsentStatus(
     tx,
+    tenantId,
     lead.id,
     toConsentStatus("withdrawn"),
     "unsubscribe",
@@ -225,6 +246,7 @@ export const unsubscribeLead = async (
 
 export const deleteLeadByEmail = async (
   tx: PoolClient,
+  tenantId: string,
   email: string,
 ): Promise<{ deleted: boolean }> => {
   const emailNormalized = normalizeEmail(email);
@@ -233,7 +255,8 @@ export const deleteLeadByEmail = async (
     sql`
       SELECT "id"
       FROM ${LEADS_TABLE}
-      WHERE "email_normalized" = ${emailNormalized}
+      WHERE "tenant_id" = ${tenantId}
+        AND "email_normalized" = ${emailNormalized}
     `,
   );
   const lead = rows[0];
@@ -247,7 +270,8 @@ export const deleteLeadByEmail = async (
     sql`
       UPDATE ${FORM_SUBMISSIONS_TABLE}
       SET "payload" = NULL
-      WHERE "lead_id" = ${lead.id}
+      WHERE "tenant_id" = ${tenantId}
+        AND "lead_id" = ${lead.id}
     `,
   );
 
@@ -255,7 +279,8 @@ export const deleteLeadByEmail = async (
     tx,
     sql`
       DELETE FROM ${LEADS_TABLE}
-      WHERE "id" = ${lead.id}
+      WHERE "tenant_id" = ${tenantId}
+        AND "id" = ${lead.id}
     `,
   );
   return { deleted: true };

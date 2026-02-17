@@ -24,6 +24,7 @@
     "migrate:status": "prisma migrate status",
     "migrate:reset": "prisma migrate reset --force",
     "db:studio": "prisma studio",
+    "seed:baseline": "tsx test/helpers/seed-baseline.ts",
     "retention:purge": "tsx src/scripts/purge-retention.ts",
     "rollups:run": "tsx src/scripts/rollups-run.ts",
     "rollups:backfill": "tsx src/scripts/rollups-backfill.ts",

@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { after, before, beforeEach, test } from "node:test";
 
 import { env } from "../../src/config/env.js";
-import { pool } from "../../src/lib/db.js";
+import { pool, withOwnerRole } from "../../src/lib/db.js";
 import { prisma } from "../helpers/prisma.js";
 import { rollupDateRange } from "../../src/services/metrics/rollups.js";
-import { closeDatabase, resetDatabase } from "../helpers/db.js";
+import { closeDatabase, resetDatabase, TEST_TENANT_ID } from "../helpers/db.js";
 
 const PROPERTY_ID = env.ROLLUP_DEFAULT_PROPERTY_ID;
 
@@ -16,6 +16,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   const visitorOne = await prisma.visitor.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       anonId: `anon-rollup-1-${day}`,
       firstSeenAt: previousDay,
       lastSeenAt: dayMid,
@@ -24,6 +25,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   const visitorTwo = await prisma.visitor.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       anonId: `anon-rollup-2-${day}`,
       firstSeenAt: dayStart,
       lastSeenAt: dayMid,
@@ -32,6 +34,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   const sessionOne = await prisma.session.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitorOne.id,
       startedAt: dayStart,
       lastEventAt: dayMid,
@@ -42,6 +45,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   const sessionTwo = await prisma.session.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitorTwo.id,
       startedAt: dayStart,
       lastEventAt: dayMid,
@@ -52,6 +56,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   await prisma.event.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitorOne.id,
       sessionId: sessionOne.id,
       eventType: "page_view",
@@ -66,6 +71,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   await prisma.event.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitorOne.id,
       sessionId: sessionOne.id,
       eventType: "form_start",
@@ -77,6 +83,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   await prisma.event.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitorOne.id,
       sessionId: sessionOne.id,
       eventType: "form_submit",
@@ -88,6 +95,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   await prisma.event.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitorTwo.id,
       sessionId: sessionTwo.id,
       eventType: "page_view",
@@ -102,6 +110,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   const lead = await prisma.lead.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       emailNormalized: `rollup-${day}@example.com`,
       firstCapturedAt: dayMid,
       lastCapturedAt: dayMid,
@@ -111,6 +120,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   await prisma.leadIdentity.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       leadId: lead.id,
       visitorId: visitorOne.id,
       linkSource: "form_submit",
@@ -121,6 +131,7 @@ const createBaseTraffic = async (day: string): Promise<void> => {
 
   await prisma.formSubmission.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       leadId: lead.id,
       visitorId: visitorOne.id,
       sessionId: sessionOne.id,
@@ -149,22 +160,21 @@ test("rollupDateRange upserts daily rows idempotently", async () => {
   await createBaseTraffic(day);
 
   const range = {
+    tenantId: TEST_TENANT_ID,
     from: new Date(`${day}T00:00:00.000Z`),
     to: new Date(`${day}T00:00:00.000Z`),
     propertyId: PROPERTY_ID,
     batchSize: 2,
   };
 
-  const client = await pool.connect();
-  try {
+  await withOwnerRole(async (client) => {
     await rollupDateRange(client, range);
-  } finally {
-    client.release();
-  }
+  });
 
   const firstMetric = await prisma.dailyMetricRollup.findUnique({
     where: {
-      propertyId_day: {
+      tenantId_propertyId_day: {
+        tenantId: TEST_TENANT_ID,
         propertyId: PROPERTY_ID,
         day: range.from,
       },
@@ -178,24 +188,21 @@ test("rollupDateRange upserts daily rows idempotently", async () => {
   assert.equal(firstMetric.newLeads, 1);
 
   const metricCountAfterFirstRun = await prisma.dailyMetricRollup.count({
-    where: { propertyId: PROPERTY_ID },
+    where: { tenantId: TEST_TENANT_ID, propertyId: PROPERTY_ID },
   });
   assert.equal(metricCountAfterFirstRun, 1);
 
-  const client2 = await pool.connect();
-  try {
+  await withOwnerRole(async (client2) => {
     await rollupDateRange(client2, range);
-  } finally {
-    client2.release();
-  }
+  });
 
   const metricCountAfterSecondRun = await prisma.dailyMetricRollup.count({
-    where: { propertyId: PROPERTY_ID },
+    where: { tenantId: TEST_TENANT_ID, propertyId: PROPERTY_ID },
   });
   assert.equal(metricCountAfterSecondRun, 1);
 
   const ingestCount = await prisma.dailyIngestRollup.count({
-    where: { propertyId: PROPERTY_ID },
+    where: { tenantId: TEST_TENANT_ID, propertyId: PROPERTY_ID },
   });
   assert.equal(ingestCount, 1);
 });
@@ -205,21 +212,20 @@ test("rollupDateRange recomputes updated values for an existing day", async () =
   const dayDate = new Date(`${day}T00:00:00.000Z`);
   await createBaseTraffic(day);
 
-  const client = await pool.connect();
-  try {
+  await withOwnerRole(async (client) => {
     await rollupDateRange(client, {
+      tenantId: TEST_TENANT_ID,
       from: dayDate,
       to: dayDate,
       propertyId: PROPERTY_ID,
       batchSize: 1,
     });
-  } finally {
-    client.release();
-  }
+  });
 
   const before = await prisma.dailyMetricRollup.findUnique({
     where: {
-      propertyId_day: {
+      tenantId_propertyId_day: {
+        tenantId: TEST_TENANT_ID,
         propertyId: PROPERTY_ID,
         day: dayDate,
       },
@@ -232,6 +238,7 @@ test("rollupDateRange recomputes updated values for an existing day", async () =
 
   const visitor = await prisma.visitor.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       anonId: `anon-rollup-extra-${day}`,
       firstSeenAt: dayDate,
       lastSeenAt: dayDate,
@@ -239,6 +246,7 @@ test("rollupDateRange recomputes updated values for an existing day", async () =
   });
   const session = await prisma.session.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitor.id,
       startedAt: dayDate,
       lastEventAt: dayDate,
@@ -248,6 +256,7 @@ test("rollupDateRange recomputes updated values for an existing day", async () =
   });
   await prisma.event.create({
     data: {
+      tenantId: TEST_TENANT_ID,
       visitorId: visitor.id,
       sessionId: session.id,
       eventType: "page_view",
@@ -259,21 +268,20 @@ test("rollupDateRange recomputes updated values for an existing day", async () =
     },
   });
 
-  const client2 = await pool.connect();
-  try {
+  await withOwnerRole(async (client2) => {
     await rollupDateRange(client2, {
+      tenantId: TEST_TENANT_ID,
       from: dayDate,
       to: dayDate,
       propertyId: PROPERTY_ID,
       batchSize: 1,
     });
-  } finally {
-    client2.release();
-  }
+  });
 
   const afterMetric = await prisma.dailyMetricRollup.findUnique({
     where: {
-      propertyId_day: {
+      tenantId_propertyId_day: {
+        tenantId: TEST_TENANT_ID,
         propertyId: PROPERTY_ID,
         day: dayDate,
       },
@@ -294,23 +302,21 @@ test("rollupDateRange handles multi-day windows deterministically", async () => 
   await createBaseTraffic("2026-01-23");
 
   let result;
-  const client = await pool.connect();
-  try {
+  await withOwnerRole(async (client) => {
     result = await rollupDateRange(client, {
+      tenantId: TEST_TENANT_ID,
       from: new Date("2026-01-22T00:00:00.000Z"),
       to: new Date("2026-01-23T00:00:00.000Z"),
       propertyId: PROPERTY_ID,
       batchSize: 2,
     });
-  } finally {
-    client.release();
-  }
+  });
 
   assert.equal(result.dayCount, 2);
   assert.deepEqual(result.rolledUpDays, ["2026-01-22", "2026-01-23"]);
 
   const rows = await prisma.dailyMetricRollup.findMany({
-    where: { propertyId: PROPERTY_ID },
+    where: { tenantId: TEST_TENANT_ID, propertyId: PROPERTY_ID },
     orderBy: { day: "asc" },
     select: { day: true, uniqueVisitors: true },
   });
@@ -337,6 +343,7 @@ test("rollupDateRange respects UTC day boundaries", async () => {
   ): Promise<void> => {
     const visitor = await prisma.visitor.create({
       data: {
+        tenantId: TEST_TENANT_ID,
         anonId,
         firstSeenAt: occurredAt,
         lastSeenAt: occurredAt,
@@ -344,6 +351,7 @@ test("rollupDateRange respects UTC day boundaries", async () => {
     });
     const session = await prisma.session.create({
       data: {
+        tenantId: TEST_TENANT_ID,
         visitorId: visitor.id,
         startedAt: occurredAt,
         lastEventAt: occurredAt,
@@ -353,6 +361,7 @@ test("rollupDateRange respects UTC day boundaries", async () => {
     });
     await prisma.event.create({
       data: {
+        tenantId: TEST_TENANT_ID,
         visitorId: visitor.id,
         sessionId: session.id,
         eventType: "page_view",
@@ -368,20 +377,19 @@ test("rollupDateRange respects UTC day boundaries", async () => {
   await createBoundaryEvent("anon-boundary-1", occurredAtOne, "/late");
   await createBoundaryEvent("anon-boundary-2", occurredAtTwo, "/early");
 
-  const client = await pool.connect();
-  try {
+  await withOwnerRole(async (client) => {
     await rollupDateRange(client, {
+      tenantId: TEST_TENANT_ID,
       from: new Date("2026-01-24T00:00:00.000Z"),
       to: new Date("2026-01-25T00:00:00.000Z"),
       propertyId: PROPERTY_ID,
       batchSize: 2,
     });
-  } finally {
-    client.release();
-  }
+  });
 
   const rows = await prisma.dailyMetricRollup.findMany({
     where: {
+      tenantId: TEST_TENANT_ID,
       propertyId: PROPERTY_ID,
       day: {
         gte: new Date("2026-01-24T00:00:00.000Z"),

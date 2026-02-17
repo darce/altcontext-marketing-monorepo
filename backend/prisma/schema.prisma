@@ -46,9 +46,66 @@ enum DeviceType {
   unknown
 }
 
+model Tenant {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String
+  slug      String   @unique
+  plan      String   @default("free")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  visitors           Visitor[]
+  sessions           Session[]
+  events             Event[]
+  leads              Lead[]
+  leadIdentities     LeadIdentity[]
+  formSubmissions    FormSubmission[]
+  consentEvents      ConsentEvent[]
+  ingestRejections   IngestRejection[]
+  dailyMetricRollups DailyMetricRollup[]
+  dailyIngestRollups DailyIngestRollup[]
+  apiKeys            ApiKey[]
+  users              User[]
+
+  @@map("tenants")
+}
+
+model ApiKey {
+  id        String    @id @default(uuid()) @db.Uuid
+  tenantId  String    @map("tenant_id") @db.Uuid
+  keyHash   String    @unique @map("key_hash") @db.VarChar(64)
+  keyPrefix String    @map("key_prefix") @db.VarChar(16)
+  label     String?   @db.VarChar(255)
+  scope     String    @db.VarChar(20) // "ingest" or "admin"
+  expiresAt DateTime? @map("expires_at")
+  revokedAt DateTime? @map("revoked_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  email     String
+  name      String?
+  role      String   @default("member")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, email])
+  @@map("users")
+}
+
 model Visitor {
   id          String   @id @default(uuid())
-  anonId      String   @unique @map("anon_id")
+  tenantId    String   @map("tenant_id") @db.Uuid
+  anonId      String   @map("anon_id")
   firstSeenAt DateTime @default(now()) @map("first_seen_at")
   lastSeenAt  DateTime @default(now()) @map("last_seen_at")
   firstIpHash String?  @map("first_ip_hash") @db.VarChar(128)
@@ -58,17 +115,21 @@ model Visitor {
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
 
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   sessions        Session[]
   events          Event[]
   leadIdentities  LeadIdentity[]
   formSubmissions FormSubmission[]
 
+  @@unique([tenantId, anonId])
   @@index([lastSeenAt], map: "visitors_last_seen_at_idx")
+  @@index([tenantId], map: "visitors_tenant_id_idx")
   @@map("visitors")
 }
 
 model Session {
   id          String    @id @default(uuid())
+  tenantId    String    @map("tenant_id") @db.Uuid
   visitorId   String    @map("visitor_id")
   startedAt   DateTime  @default(now()) @map("started_at")
   endedAt     DateTime? @map("ended_at")
@@ -83,20 +144,23 @@ model Session {
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
 
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   visitor         Visitor          @relation(fields: [visitorId], references: [id], onDelete: Cascade)
   events          Event[]
   formSubmissions FormSubmission[]
 
   @@index([visitorId, startedAt], map: "sessions_visitor_id_started_at_idx")
   @@index([visitorId, lastEventAt], map: "sessions_visitor_id_last_event_at_idx")
+  @@index([tenantId], map: "sessions_tenant_id_idx")
   @@map("sessions")
 }
 
 model Event {
   id            String        @id @default(uuid())
+  tenantId      String        @map("tenant_id") @db.Uuid
   visitorId     String        @map("visitor_id")
   sessionId     String?       @map("session_id")
-  dedupeKey     String?       @unique @map("dedupe_key") @db.VarChar(64)
+  dedupeKey     String?       @map("dedupe_key") @db.VarChar(64)
   eventType     String        @map("event_type") @db.VarChar(64)
   path          String?       @db.Text
   timestamp     DateTime      @default(now())
@@ -112,21 +176,25 @@ model Event {
   isConversion  Boolean       @default(false) @map("is_conversion")
   createdAt     DateTime      @default(now()) @map("created_at")
 
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   visitor Visitor  @relation(fields: [visitorId], references: [id], onDelete: Cascade)
   session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
+  @@unique([tenantId, dedupeKey])
   @@index([visitorId, timestamp], map: "events_visitor_id_timestamp_idx")
   @@index([eventType, timestamp], map: "events_event_type_timestamp_idx")
   @@index([path, timestamp], map: "events_path_timestamp_idx")
   @@index([sessionId, timestamp], map: "events_session_id_timestamp_idx")
   @@index([propertyId, timestamp], map: "events_property_id_timestamp_idx")
   @@index([trafficSource, timestamp], map: "events_traffic_source_timestamp_idx")
+  @@index([tenantId], map: "events_tenant_id_idx")
   @@map("events")
 }
 
 model Lead {
   id              String        @id @default(uuid())
-  emailNormalized String        @unique @map("email_normalized") @db.VarChar(320)
+  tenantId        String        @map("tenant_id") @db.Uuid
+  emailNormalized String        @map("email_normalized") @db.VarChar(320)
   emailDomain     String?       @map("email_domain") @db.VarChar(255)
   consentStatus   ConsentStatus @default(pending) @map("consent_status")
   firstCapturedAt DateTime      @default(now()) @map("first_captured_at")
@@ -135,16 +203,20 @@ model Lead {
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
 
+  tenant        Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   identities    LeadIdentity[]
   submissions   FormSubmission[]
   consentEvents ConsentEvent[]
 
+  @@unique([tenantId, emailNormalized])
   @@index([lastCapturedAt], map: "leads_last_captured_at_idx")
+  @@index([tenantId], map: "leads_tenant_id_idx")
   @@map("leads")
 }
 
 model LeadIdentity {
   id         String     @id @default(uuid())
+  tenantId   String     @map("tenant_id") @db.Uuid
   leadId     String     @map("lead_id")
   visitorId  String     @map("visitor_id")
   linkSource LinkSource @default(form_submit) @map("link_source")
@@ -152,17 +224,20 @@ model LeadIdentity {
   linkedAt   DateTime   @default(now()) @map("linked_at")
   createdAt  DateTime   @default(now()) @map("created_at")
 
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
   visitor Visitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
 
-  @@unique([leadId, visitorId, linkSource], map: "lead_identities_lead_visitor_source_key")
+  @@unique([tenantId, leadId, visitorId, linkSource])
   @@index([leadId, linkedAt], map: "lead_identities_lead_id_linked_at_idx")
   @@index([visitorId, linkedAt], map: "lead_identities_visitor_id_linked_at_idx")
+  @@index([tenantId], map: "lead_identities_tenant_id_idx")
   @@map("lead_identities")
 }
 
 model FormSubmission {
   id               String           @id @default(uuid())
+  tenantId         String           @map("tenant_id") @db.Uuid
   leadId           String?          @map("lead_id")
   visitorId        String?          @map("visitor_id")
   sessionId        String?          @map("session_id")
@@ -172,6 +247,7 @@ model FormSubmission {
   validationStatus ValidationStatus @default(accepted) @map("validation_status")
   createdAt        DateTime         @default(now()) @map("created_at")
 
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lead    Lead?    @relation(fields: [leadId], references: [id], onDelete: SetNull)
   visitor Visitor? @relation(fields: [visitorId], references: [id], onDelete: SetNull)
   session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
@@ -179,11 +255,13 @@ model FormSubmission {
   @@index([leadId, submittedAt], map: "form_submissions_lead_id_submitted_at_idx")
   @@index([visitorId, submittedAt], map: "form_submissions_visitor_id_submitted_at_idx")
   @@index([sessionId, submittedAt], map: "form_submissions_session_id_submitted_at_idx")
+  @@index([tenantId], map: "form_submissions_tenant_id_idx")
   @@map("form_submissions")
 }
 
 model ConsentEvent {
   id        String        @id @default(uuid())
+  tenantId  String        @map("tenant_id") @db.Uuid
   leadId    String        @map("lead_id")
   status    ConsentStatus
   source    String        @db.VarChar(128)
@@ -191,14 +269,17 @@ model ConsentEvent {
   timestamp DateTime      @default(now())
   createdAt DateTime      @default(now()) @map("created_at")
 
-  lead Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
   @@index([leadId, timestamp], map: "consent_events_lead_id_timestamp_idx")
+  @@index([tenantId], map: "consent_events_tenant_id_idx")
   @@map("consent_events")
 }
 
 model IngestRejection {
   id         String   @id @default(uuid())
+  tenantId   String   @map("tenant_id") @db.Uuid
   propertyId String   @map("property_id") @db.VarChar(128)
   endpoint   String   @db.VarChar(64)
   reason     String   @db.VarChar(64)
@@ -206,13 +287,17 @@ model IngestRejection {
   occurredAt DateTime @default(now()) @map("occurred_at")
   createdAt  DateTime @default(now()) @map("created_at")
 
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
   @@index([propertyId, occurredAt], map: "ingest_rejections_property_id_occurred_at_idx")
   @@index([endpoint, occurredAt], map: "ingest_rejections_endpoint_occurred_at_idx")
+  @@index([tenantId], map: "ingest_rejections_tenant_id_idx")
   @@map("ingest_rejections")
 }
 
 model DailyMetricRollup {
   id                      String   @id @default(uuid())
+  tenantId                String   @map("tenant_id") @db.Uuid
   propertyId              String   @map("property_id") @db.VarChar(128)
   day                     DateTime @db.Date
   uniqueVisitors          Int      @default(0) @map("unique_visitors")
@@ -232,13 +317,17 @@ model DailyMetricRollup {
   createdAt               DateTime @default(now()) @map("created_at")
   updatedAt               DateTime @updatedAt @map("updated_at")
 
-  @@unique([propertyId, day], map: "daily_metric_rollups_property_day_key")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, propertyId, day])
   @@index([day], map: "daily_metric_rollups_day_idx")
+  @@index([tenantId], map: "daily_metric_rollups_tenant_id_idx")
   @@map("daily_metric_rollups")
 }
 
 model DailyIngestRollup {
   id             String   @id @default(uuid())
+  tenantId       String   @map("tenant_id") @db.Uuid
   propertyId     String   @map("property_id") @db.VarChar(128)
   day            DateTime @db.Date
   eventsAccepted Int      @default(0) @map("events_accepted")
@@ -251,7 +340,10 @@ model DailyIngestRollup {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  @@unique([propertyId, day], map: "daily_ingest_rollups_property_day_key")
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, propertyId, day])
   @@index([day], map: "daily_ingest_rollups_day_idx")
+  @@index([tenantId], map: "daily_ingest_rollups_tenant_id_idx")
   @@map("daily_ingest_rollups")
 }

@@ -3,7 +3,7 @@ import { after, before, beforeEach, test } from "node:test";
 import { randomUUID } from "node:crypto";
 
 import { env } from "../../src/config/env.js";
-import { pool, query, sql } from "../../src/lib/db.js";
+import { pool, query, sql, withTenant } from "../../src/lib/db.js";
 import { tableRef } from "../../src/lib/sql.js";
 import {
   linkLeadToVisitor,
@@ -15,6 +15,8 @@ import { LinkSource } from "../../src/lib/schema-enums.js";
 const VISITORS_TABLE = tableRef("visitors");
 const LEAD_IDENTITIES_TABLE = tableRef("lead_identities");
 const LEADS_TABLE = tableRef("leads");
+
+const TEST_TENANT_ID = "00000000-0000-4000-a000-000000000001";
 
 before(async () => {
   await resetDatabase();
@@ -29,21 +31,21 @@ after(async () => {
 });
 
 test("linkLeadToVisitor creates a strong link", async () => {
-  const client = await pool.connect();
-  try {
+  await withTenant(TEST_TENANT_ID, async (client) => {
     const leadId = randomUUID();
     const visitorId = randomUUID();
     await query(
       client,
-      sql`INSERT INTO ${VISITORS_TABLE} ("id", "anon_id", "updated_at") VALUES (${visitorId}, 'visitor-1', NOW())`,
+      sql`INSERT INTO ${VISITORS_TABLE} ("id", "tenant_id", "anon_id", "updated_at") VALUES (${visitorId}, ${TEST_TENANT_ID}, 'visitor-1', NOW())`,
     );
     await query(
       client,
-      sql`INSERT INTO ${LEADS_TABLE} ("id", "email_normalized", "updated_at") VALUES (${leadId}, 'lead-1@test.com', NOW())`,
+      sql`INSERT INTO ${LEADS_TABLE} ("id", "tenant_id", "email_normalized", "updated_at") VALUES (${leadId}, ${TEST_TENANT_ID}, 'lead-1@test.com', NOW())`,
     );
 
     await linkLeadToVisitor(
       client,
+      TEST_TENANT_ID,
       leadId,
       visitorId,
       LinkSource.form_submit,
@@ -52,20 +54,17 @@ test("linkLeadToVisitor creates a strong link", async () => {
 
     const { rows: linkRows } = await query<any>(
       client,
-      sql`SELECT * FROM ${LEAD_IDENTITIES_TABLE} WHERE "lead_id" = ${leadId} AND "visitor_id" = ${visitorId}`,
+      sql`SELECT * FROM ${LEAD_IDENTITIES_TABLE} WHERE "tenant_id" = ${TEST_TENANT_ID} AND "lead_id" = ${leadId} AND "visitor_id" = ${visitorId}`,
     );
     const link = linkRows[0];
     assert.ok(link);
     assert.equal(Number(link.confidence), 1.0);
     assert.equal(link.link_source, LinkSource.form_submit);
-  } finally {
-    client.release();
-  }
+  });
 });
 
 test("linkHeuristicVisitors links based on shared IP/UA", async () => {
-  const client = await pool.connect();
-  try {
+  await withTenant(TEST_TENANT_ID, async (client) => {
     const ipHash = "shared-ip";
     const uaHash = "shared-ua";
     const now = new Date();
@@ -75,8 +74,8 @@ test("linkHeuristicVisitors links based on shared IP/UA", async () => {
     await query(
       client,
       sql`
-      INSERT INTO ${VISITORS_TABLE} ("id", "anon_id", "last_ip_hash", "last_ua_hash", "last_seen_at", "updated_at")
-      VALUES (${v1Id}, 'anon-1', ${ipHash}, ${uaHash}, ${new Date(now.getTime() - 2 * 60 * 1000)}, NOW())
+      INSERT INTO ${VISITORS_TABLE} ("id", "tenant_id", "anon_id", "last_ip_hash", "last_ua_hash", "last_seen_at", "updated_at")
+      VALUES (${v1Id}, ${TEST_TENANT_ID}, 'anon-1', ${ipHash}, ${uaHash}, ${new Date(now.getTime() - 2 * 60 * 1000)}, NOW())
     `,
     );
 
@@ -85,15 +84,15 @@ test("linkHeuristicVisitors links based on shared IP/UA", async () => {
     await query(
       client,
       sql`
-      INSERT INTO ${VISITORS_TABLE} ("id", "anon_id", "last_ip_hash", "last_ua_hash", "last_seen_at", "updated_at")
-      VALUES (${primaryVId}, 'anon-primary', ${ipHash}, ${uaHash}, ${now}, NOW())
+      INSERT INTO ${VISITORS_TABLE} ("id", "tenant_id", "anon_id", "last_ip_hash", "last_ua_hash", "last_seen_at", "updated_at")
+      VALUES (${primaryVId}, ${TEST_TENANT_ID}, 'anon-primary', ${ipHash}, ${uaHash}, ${now}, NOW())
     `,
     );
 
     const leadId = randomUUID();
     await query(
       client,
-      sql`INSERT INTO ${LEADS_TABLE} ("id", "email_normalized", "updated_at") VALUES (${leadId}, 'lead-h@test.com', NOW())`,
+      sql`INSERT INTO ${LEADS_TABLE} ("id", "tenant_id", "email_normalized", "updated_at") VALUES (${leadId}, ${TEST_TENANT_ID}, 'lead-h@test.com', NOW())`,
     );
 
     // Enable heuristic linking
@@ -103,6 +102,7 @@ test("linkHeuristicVisitors links based on shared IP/UA", async () => {
     try {
       const linksCreated = await linkHeuristicVisitors(
         client,
+        TEST_TENANT_ID,
         leadId,
         primaryVId,
         ipHash,
@@ -112,7 +112,7 @@ test("linkHeuristicVisitors links based on shared IP/UA", async () => {
 
       const { rows: linkRows } = await query<any>(
         client,
-        sql`SELECT * FROM ${LEAD_IDENTITIES_TABLE} WHERE "lead_id" = ${leadId} AND "visitor_id" = ${v1Id}`,
+        sql`SELECT * FROM ${LEAD_IDENTITIES_TABLE} WHERE "tenant_id" = ${TEST_TENANT_ID} AND "lead_id" = ${leadId} AND "visitor_id" = ${v1Id}`,
       );
       const hLink = linkRows[0];
       assert.ok(hLink);
@@ -127,12 +127,13 @@ test("linkHeuristicVisitors links based on shared IP/UA", async () => {
     const lead2Id = randomUUID();
     await query(
       client,
-      sql`INSERT INTO ${LEADS_TABLE} ("id", "email_normalized", "updated_at") VALUES (${lead2Id}, 'lead-h2@test.com', NOW())`,
+      sql`INSERT INTO ${LEADS_TABLE} ("id", "tenant_id", "email_normalized", "updated_at") VALUES (${lead2Id}, ${TEST_TENANT_ID}, 'lead-h2@test.com', NOW())`,
     );
     (env as any).ENABLE_HEURISTIC_LINKING = false;
     try {
       const linksCreated = await linkHeuristicVisitors(
         client,
+        TEST_TENANT_ID,
         lead2Id,
         primaryVId,
         ipHash,
@@ -141,13 +142,11 @@ test("linkHeuristicVisitors links based on shared IP/UA", async () => {
       assert.equal(linksCreated, 0);
       const { rows: linkRows } = await query<any>(
         client,
-        sql`SELECT * FROM ${LEAD_IDENTITIES_TABLE} WHERE "lead_id" = ${lead2Id}`,
+        sql`SELECT * FROM ${LEAD_IDENTITIES_TABLE} WHERE "tenant_id" = ${TEST_TENANT_ID} AND "lead_id" = ${lead2Id}`,
       );
       assert.equal(linkRows.length, 0);
     } finally {
       (env as any).ENABLE_HEURISTIC_LINKING = originalEnable;
     }
-  } finally {
-    client.release();
-  }
+  });
 });

@@ -18,6 +18,7 @@ export interface AttributionInput {
 }
 
 interface EnsureVisitorSessionInput extends AttributionInput {
+  tenantId: string;
   anonId: string;
   occurredAt: Date;
   request: RequestContext;
@@ -26,6 +27,7 @@ interface EnsureVisitorSessionInput extends AttributionInput {
 // Map snake_case DB rows to camelCase domain objects
 interface VisitorRow {
   id: string;
+  tenant_id: string;
   anon_id: string;
   first_seen_at: Date;
   last_seen_at: Date;
@@ -39,6 +41,7 @@ interface VisitorRow {
 
 interface SessionRow {
   id: string;
+  tenant_id: string;
   visitor_id: string;
   started_at: Date;
   ended_at: Date | null;
@@ -56,6 +59,7 @@ interface SessionRow {
 
 const mapVisitor = (row: VisitorRow): Visitor => ({
   id: row.id,
+  tenantId: row.tenant_id,
   anonId: row.anon_id,
   firstSeenAt: row.first_seen_at,
   lastSeenAt: row.last_seen_at,
@@ -69,6 +73,7 @@ const mapVisitor = (row: VisitorRow): Visitor => ({
 
 const mapSession = (row: SessionRow): Session => ({
   id: row.id,
+  tenantId: row.tenant_id,
   visitorId: row.visitor_id,
   startedAt: row.started_at,
   endedAt: row.ended_at,
@@ -134,6 +139,7 @@ const shouldStartNewSession = (
 
 const createSession = async (
   tx: PoolClient,
+  tenantId: string,
   visitorId: string,
   occurredAt: Date,
   input: AttributionInput,
@@ -143,6 +149,7 @@ const createSession = async (
     sql`
       INSERT INTO ${SESSIONS_TABLE} (
         "id",
+        "tenant_id",
         "visitor_id",
         "started_at",
         "last_event_at",
@@ -157,6 +164,7 @@ const createSession = async (
         "updated_at"
       ) VALUES (
         ${randomUUID()},
+        ${tenantId},
         ${visitorId},
         ${occurredAt},
         ${occurredAt},
@@ -207,6 +215,7 @@ export const ensureVisitorSession = async (
     sql`
       INSERT INTO ${VISITORS_TABLE} (
         "id",
+        "tenant_id",
         "anon_id",
         "first_seen_at",
         "last_seen_at",
@@ -218,6 +227,7 @@ export const ensureVisitorSession = async (
         "updated_at"
       ) VALUES (
         ${randomUUID()},
+        ${input.tenantId},
         ${input.anonId},
         ${input.occurredAt},
         ${input.occurredAt},
@@ -228,7 +238,7 @@ export const ensureVisitorSession = async (
         NOW(),
         NOW()
       )
-      ON CONFLICT ("anon_id") DO UPDATE SET
+      ON CONFLICT ("tenant_id", "anon_id") DO UPDATE SET
         "last_seen_at" = ${input.occurredAt},
         "last_ip_hash" = ${input.request.ipHash},
         "last_ua_hash" = ${input.request.uaHash},
@@ -244,7 +254,8 @@ export const ensureVisitorSession = async (
     tx,
     sql`
       SELECT * FROM ${SESSIONS_TABLE}
-      WHERE "visitor_id" = ${visitor.id}
+      WHERE "tenant_id" = ${input.tenantId}
+        AND "visitor_id" = ${visitor.id}
       ORDER BY "started_at" DESC
       LIMIT 1
     `,
@@ -266,12 +277,24 @@ export const ensureVisitorSession = async (
         `,
       );
     }
-    session = await createSession(tx, visitor.id, input.occurredAt, input);
+    session = await createSession(
+      tx,
+      input.tenantId,
+      visitor.id,
+      input.occurredAt,
+      input,
+    );
   } else if (latestSession) {
     session = await updateSession(tx, latestSession.id, input.occurredAt);
   } else {
     // Fallback if no latestSession but shouldStartNewSession returned false (logic guard)
-    session = await createSession(tx, visitor.id, input.occurredAt, input);
+    session = await createSession(
+      tx,
+      input.tenantId,
+      visitor.id,
+      input.occurredAt,
+      input,
+    );
   }
 
   return { visitor, session };
