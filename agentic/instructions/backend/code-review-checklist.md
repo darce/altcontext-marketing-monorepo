@@ -205,6 +205,75 @@ Task checklist items in `agentic/tasks/backend-tasks/` are consistently left unc
 
 **Action:** Before sign-off, open every task file referenced by the work and mark completed items `- [x]`. If all items in a task are complete, add a `> ✅ **CLOSED**` status header. This is a **sign-off blocker** — do not approve a review where completed work is not reflected in the task checklist.
 
+### 16. Version-Gated SQL Feature Assumptions
+
+Review conclusions sometimes assume a PostgreSQL feature or syntax is available without validating it against the actual target major version.
+
+**What to look for:**
+- Task docs that claim new SQL syntax (for example, `RETURNING old/new`, parameter ACL behavior) without a reproducible probe
+- Migration SQL that gates behavior on `server_version_num`, but review findings treat the behavior as universally active
+- Findings that discuss PG18 behavior while local verification ran on PG17 (or vice versa) without stating the environment gap
+
+**Action:** Add an executable SQL probe to the review notes (`psql ... -c`), record the exact server version, and scope conclusions accordingly. If local env is not the target major, mark verification as pending in a PG18 environment instead of stating speculative behavior as fact.
+
+### 17. Prisma Default Semantics Drift
+
+`schema.prisma` defaults and database defaults can diverge silently, especially when raw SQL migrations set DB-generated defaults (for example, `uuidv7()`) but Prisma models keep client-side defaults (for example, `@default(uuid())`).
+
+**What to look for:**
+- Migrations altering column defaults via raw SQL without corresponding Prisma schema default updates
+- Review claims that assume `@default(uuid())` maps to a DB default expression
+- Unverified assumptions about drift risk without running Prisma diff tooling
+
+**Action:** Run `prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code` after default-related migrations. If drift is intentional, document it explicitly in the task and avoid generating corrective migrations from schema drift output.
+
+### 18. Scope-Leaky "Remaining Usage" Claims
+
+Findings that state "only remaining usage/import" often mix production runtime code with tests and dev helpers, producing incorrect conclusions.
+
+**What to look for:**
+- Global grep claims that do not specify path scope (for example, `src/` vs `test/`)
+- Findings labeling something as "only remaining" when multiple test/dev call sites still exist
+- Recommendations that remove legitimate test-only usage because runtime/test scopes were conflated
+
+**Action:** Always scope grep queries by intent and report scope explicitly:
+- Runtime: `rg <pattern> backend/src`
+- Tests/dev tooling: `rg <pattern> backend/test backend/scripts`
+Only elevate to production findings when runtime scope is affected.
+
+### 19. Split Schema Resolution Sources
+
+When schema selection can come from multiple configuration sources (for example `DATABASE_URL` query params and a separate schema env var), different layers may resolve different schemas and silently read/write different data.
+
+**What to look for:**
+- Connection pool `search_path` derived from one source while SQL identifier builders use another
+- Test helpers and runtime code using different schema resolution logic
+- No fail-fast behavior when both schema sources are present but disagree
+
+**Action:** Centralize schema resolution in one shared helper used by runtime, test helpers, and SQL builders. If multiple schema inputs are present, validate they agree and fail fast on conflict.
+
+### 20. Destructive Test Target Collisions
+
+Test workflows often run destructive operations (`migrate reset`, truncation, drop/create). If test and development URLs drift to the same target, test runs can wipe developer data and hide environment boundary mistakes.
+
+**What to look for:**
+- `TEST_DATABASE_URL` or equivalent resolves to the same database as default `DATABASE_URL`
+- Make/test scripts labeled "isolated" but using shared DB targets
+- Test setup commands that mutate data structures used by local development
+
+**Action:** Keep test and development database targets distinct by default (separate DB name or clearly isolated schema with aligned runtime/test config). Verify destructive test commands cannot hit the default dev target.
+
+### 21. SECURITY DEFINER Privilege and Search Path Drift
+
+`SECURITY DEFINER` functions can unintentionally expand privilege if execute grants and search paths are not tightly controlled.
+
+**What to look for:**
+- Function executable by `PUBLIC` when only specific roles should call it
+- Unqualified object references in function bodies relying on mutable caller/session search paths
+- Dynamic SQL over identifiers built without identifier quoting/validation
+
+**Action:** Explicitly `REVOKE` execute from `PUBLIC` and grant only required roles. Pin definer function `search_path` to trusted schemas (typically `pg_catalog` + explicit targets) and use identifier-safe formatting (`format('%I', ...)`) for dynamic SQL object names.
+
 ---
 
 ## Review Protocol

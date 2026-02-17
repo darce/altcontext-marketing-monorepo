@@ -1,6 +1,6 @@
 # Dashboard Roadmap
 
-Last updated: 2026-02-16
+Last updated: 2026-02-17
 
 ## Table of Contents
 
@@ -98,7 +98,7 @@ Authentication is required for all dashboard routes. Detailed design is in [mult
 
 ### Summary
 
-- **Login**: Email + bcrypt password via `POST /v1/auth/login`.
+- **Login**: Email + Argon2id password via `POST /v1/auth/login`.
 - **Session**: Encrypted HTTP-only cookie. SvelteKit `hooks.server.ts` validates session on every request.
 - **Guards**: `+layout.server.ts` at the dashboard root redirects unauthenticated users to `/login`.
 - **Logout**: `POST /v1/auth/logout` clears session.

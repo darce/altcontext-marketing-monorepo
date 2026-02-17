@@ -137,6 +137,7 @@ Prisma is a **dev-only** tool used for schema management (`prisma migrate dev`) 
 - Migrations CANNOT be run from the deployed container.
 - Apply migrations to the production database from a dev machine via `fly proxy` + `npx prisma migrate deploy`, or from CI/CD.
 - `fly.toml` must not contain a `release_command` referencing Prisma.
+- PostgreSQL major-version baseline is **18**. Any review or verification claim about PG18-only features must be executed against a PG18 runtime.
 
 ## Deployment (Oracle Cloud Infrastructure Always Free)
 

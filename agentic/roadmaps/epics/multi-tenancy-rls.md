@@ -1,6 +1,6 @@
 # Multi-Tenancy and Row-Level Security Roadmap
 
-Last updated: 2026-02-16
+Last updated: 2026-02-17
 
 ## Table of Contents
 
@@ -35,7 +35,7 @@ Last updated: 2026-02-16
 - **Existing data**: all current data belongs to a default "bootstrap" tenant created during migration.
 - **No breaking API changes**: ingest endpoints (`/v1/events`, `/v1/leads/capture`) must remain backward-compatible. Tenant resolution for ingest is via API key, not path.
 - **PIPEDA/CASL compliance**: tenant boundaries must not weaken privacy or consent isolation.
-- **Co-deployment**: backend + dashboard share a single Fly.io machine; tenant context must flow from dashboard auth through to the database session.
+- **Co-deployment**: backend + dashboard are co-deployed (Fly or OCI); tenant context must flow from dashboard auth through to the database session.
 
 ## 3. Current State
 
@@ -52,7 +52,7 @@ There is a single `ADMIN_API_KEY` env var for dashboard/metrics auth. No user or
 ```sql
 -- Tenants
 CREATE TABLE tenants (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id          UUID PRIMARY KEY DEFAULT uuidv7(),
   name        VARCHAR(255) NOT NULL,
   slug        VARCHAR(128) NOT NULL UNIQUE,
   plan        VARCHAR(64)  NOT NULL DEFAULT 'free',
@@ -62,7 +62,7 @@ CREATE TABLE tenants (
 
 -- API keys (ingest + admin)
 CREATE TABLE api_keys (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id          UUID PRIMARY KEY DEFAULT uuidv7(),
   tenant_id   UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   key_hash    VARCHAR(128) NOT NULL UNIQUE,  -- SHA-256 of the raw key
   key_prefix  VARCHAR(12)  NOT NULL,         -- first 8 chars for identification
@@ -76,7 +76,7 @@ CREATE INDEX api_keys_tenant_id_idx ON api_keys(tenant_id);
 
 -- Dashboard users
 CREATE TABLE users (
-  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  id          UUID PRIMARY KEY DEFAULT uuidv7(),
   tenant_id   UUID         NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   email       VARCHAR(320) NOT NULL,
   name        VARCHAR(255),
@@ -107,9 +107,9 @@ Add `tenant_id UUID NOT NULL REFERENCES tenants(id)` to:
 
 ## 5. Row-Level Security Strategy
 
-### Approach: session variable + RLS policies
+### Approach: validated tenant context + RLS policies
 
-PostgreSQL RLS policies are enforced via a session variable (`app.current_tenant_id`) set at the start of each request.
+PostgreSQL RLS policies are enforced via a validated tenant-context setter that writes `app.current_tenant_id` transaction-locally at the start of each request.
 
 ```sql
 -- Enable RLS on all tenant-scoped tables
@@ -120,7 +120,8 @@ ALTER TABLE events ENABLE ROW LEVEL SECURITY;
 
 -- Example policy for visitors
 CREATE POLICY tenant_isolation ON visitors
-  USING (tenant_id = current_setting('app.current_tenant_id')::uuid);
+  USING (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = NULLIF(current_setting('app.current_tenant_id', true), '')::uuid);
 
 -- The application database role must NOT be the table owner
 -- (table owners bypass RLS). Use a separate app role:
@@ -135,11 +136,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_user;
    - **Ingest endpoints** (`/v1/events`, `/v1/leads/*`): look up `x-api-key` header → `api_keys.tenant_id`.
    - **Dashboard SSR** (`SvelteKit load()`): session cookie → `users.tenant_id`.
    - **Admin endpoints** (`/v1/metrics/*`): `x-api-key` header with `scope = 'admin'`.
-3. Before the first query, set the session variable:
+3. Before the first query, set tenant context through the validated setter:
    ```sql
-   SET LOCAL app.current_tenant_id = '<tenant-uuid>';
+   SELECT public.set_tenant_context('<tenant-uuid>'::uuid, 'public');
    ```
-   (`SET LOCAL` is transaction-scoped — automatically reset on commit/rollback.)
+   (`set_tenant_context` validates tenant existence and sets a transaction-local GUC. Direct `set_config` is blocked for `app_user` on PG18+ via parameter ACL.)
 4. All subsequent queries in that transaction are filtered by RLS.
 
 ### Fastify integration
@@ -151,10 +152,10 @@ app.addHook("onRequest", async (request) => {
   request.tenantId = tenantId;
 });
 
-// Each service method wraps its work in a transaction with SET LOCAL
+// Each service method wraps its work in a transaction with validated tenant context
 const withTenant = async <T>(tenantId: string, fn: (tx: PoolClient) => Promise<T>): Promise<T> =>
   transaction(async (tx) => {
-    await tx.query(`SET LOCAL app.current_tenant_id = $1`, [tenantId]);
+    await tx.query(`SELECT public.set_tenant_context($1::uuid, $2::text)`, [tenantId, "public"]);
     return fn(tx);
   });
 ```
@@ -162,8 +163,9 @@ const withTenant = async <T>(tenantId: string, fn: (tx: PoolClient) => Promise<T
 ### Safety rules
 
 - The app connects as `app_user`, never as the table owner.
-- No query may bypass the transaction wrapper that sets the tenant context.
+- No query may bypass the transaction wrapper that sets tenant context via `set_tenant_context()`.
 - Superuser/migration connections use a separate role that is the table owner (bypasses RLS for schema changes).
+- `app_user` must not have direct permission to mutate `app.current_tenant_id` (`REVOKE ALL ON PARAMETER` on PG18+).
 - All indexes on `tenant_id` columns to prevent sequential scans on RLS filter.
 
 ## 6. API Changes
@@ -189,7 +191,7 @@ During migration, the existing `ADMIN_API_KEY` env var is mapped to the bootstra
 
 ## 7. Auth Design Decisions
 
-Three auth surfaces, each with a distinct pattern chosen for the current scale (single Fly machine, small team) while preserving a clear migration path to multi-org.
+Three auth surfaces, each with a distinct pattern chosen for the current scale (single-node deployment footprint, small team) while preserving a clear migration path to multi-org.
 
 ### Surface 1: Ingest Auth (public endpoints)
 
@@ -203,7 +205,7 @@ x-api-key: ak_live_<random>  →  SHA-256 lookup  →  api_keys.tenant_id + scop
 
 - Each key has a `scope` (`ingest` | `admin`) and an optional `property_id` constraint.
 - Ingest keys are **safe to embed in client-side JavaScript** — they can only write, not read.
-- Tenant resolution: `api_keys.tenant_id` → `SET LOCAL app.current_tenant_id`.
+- Tenant resolution: `api_keys.tenant_id` → `set_tenant_context(...)`.
 - Property scoping: if `property_id` is set, restrict writes to that property. If NULL, writes to any property within the tenant.
 - Revocable without deploy: set `revoked_at` in DB.
 - **Unsubscribe auth**: use the ingest-scoped API key. The email in the body + tenant from the key is sufficient — only the resolved tenant's lead can be unsubscribed. No HMAC token needed until email-embedded unsubscribe links exist.
@@ -228,7 +230,7 @@ This enables:
 **Pattern: Server-side sessions with encrypted HTTP-only cookies.**
 
 ```text
-POST /v1/auth/login   { email, password }  →  bcrypt verify  →  set encrypted cookie
+POST /v1/auth/login   { email, password }  →  Argon2id verify  →  set encrypted cookie
 POST /v1/auth/logout                       →  destroy session
 ```
 
@@ -346,7 +348,7 @@ The `leads.email_normalized` unique constraint becomes `UNIQUE(tenant_id, email_
 
 ### Phase MT-3: Dashboard auth (2–3 days)
 
-- Implement login (email + password with bcrypt).
+- Implement login (email + password with Argon2id).
 - Session management (encrypted cookie).
 - `+layout.server.ts` guard — redirect unauthenticated users to `/login`.
 - Display tenant name in top bar.
@@ -368,7 +370,7 @@ The `leads.email_normalized` unique constraint becomes `UNIQUE(tenant_id, email_
 ## 11. Acceptance Checklist
 
 - [ ] All existing data assigned to bootstrap tenant.
-- [ ] RLS enforced: queries without `SET LOCAL app.current_tenant_id` return zero rows.
+- [ ] RLS enforced: queries without tenant context (`set_tenant_context`) return zero rows.
 - [ ] API keys resolve to correct tenant; invalid/revoked keys are rejected.
 - [ ] Ingest endpoints accept `x-api-key` and scope data to the resolved tenant.
 - [ ] Dashboard login works; session persists across requests.
@@ -376,5 +378,5 @@ The `leads.email_normalized` unique constraint becomes `UNIQUE(tenant_id, email_
 - [ ] Multi-tenant metrics summary returns correct scoped data.
 - [ ] Existing single-tenant deployment continues to work (bootstrap tenant).
 - [ ] PIPEDA/CASL consent isolation verified per-tenant.
-- [ ] No SQL injection vector in `SET LOCAL` — tenant ID validated as UUID.
+- [ ] No direct `set_config` path for `app_user`; tenant ID only set via validated `set_tenant_context(uuid, text)`.
 - [ ] Performance: RLS filter uses index scans, no sequential scans on tenant_id.

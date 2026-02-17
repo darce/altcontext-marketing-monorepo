@@ -52,7 +52,7 @@ Each epic contains full design, data model, API contracts, delivery phases, and 
 | Epic | File | Status | Summary |
 |------|------|--------|---------|
 | Backend Marketing Server | [epics/backend-marketing-server.md](epics/backend-marketing-server.md) | Phases 0–5 complete | Core API: events, leads, sessions, rollups, metrics, i18n, runtime assertions, auth, multi-property |
-| Multi-Tenancy & RLS | [epics/multi-tenancy-rls.md](epics/multi-tenancy-rls.md) | MT-1 complete | Tenant model, API keys, RLS policies, dashboard auth, multi-property + future multi-org |
+| Multi-Tenancy & RLS | [epics/multi-tenancy-rls.md](epics/multi-tenancy-rls.md) | MT-1 + MT-2 + PG18 baseline complete | Tenant model, API keys, RLS policies, PG18 baseline schema consolidation, dashboard auth, multi-property + future multi-org |
 
 ### Dashboard Epics
 
@@ -86,9 +86,11 @@ Phase 0–2: Backend foundations ✅
   │                 │
   │                 ├─→ MT-1: Tenant model + API keys ✅
   │                 │     │
-  │                 │     └─→ MT-2: Row-Level Security ← NEXT
+  │                 │     └─→ MT-2: Row-Level Security ✅
   │                 │           │
-  │                 │           └─→ MT-3 + D-1: Dashboard auth
+  │                 │           └─→ PG18: Baseline schema consolidation (0.8.2; includes 0.8.3 audit scope) ✅
+  │                 │                 │
+  │                 │                 └─→ MT-3 + D-1: Dashboard auth ← NEXT
   │                 │
   │                 ├─→ Dashboard D-1: Skeleton + Auth
   │                 │     │
@@ -128,7 +130,8 @@ Recommended implementation order with estimated effort.
 | 3 | Phase 5: First property integration | Backend (static client) | 2–3 days | ✅ Done (0.6 + 0.6.1) |
 | 4 | Phase 6 / MT-1: Tenant model + API keys | Multi-Tenancy | 2–3 days | ✅ Done (0.7 + 0.7.1) |
 | 5 | Phase 6 / MT-2: Row-Level Security | Multi-Tenancy | 1–2 days | ✅ Done (0.8 + 0.8.1) |
-| 6 | Phase 6 / MT-3 + D-1: Dashboard auth | Multi-Tenancy + Dashboard | 2–3 days | #5 |
+| 5a | PG18: Upgrade + baseline index audit consolidation | Backend | 1–2 days | ✅ Done (0.8.2; includes 0.8.3 scope) |
+| 6 | Phase 6 / MT-3 + D-1: Dashboard auth | Multi-Tenancy + Dashboard | 2–3 days | #5a |
 | 7 | D-2: Metrics Overview | Dashboard | 2–3 days | #6 |
 | 8 | D-3: i18n + WCAG Foundation | Dashboard | 2–3 days | #6 |
 | 9 | D-4: Unit Tests + Runtime Assertions | Dashboard | 1–2 days | #6 |
@@ -179,11 +182,11 @@ These apply to both **platform** workspaces (backend + dashboard) and **client p
 |-------|---------|-----------|--------|
 | Unit | `node:test` + `tsx` | Vitest + `@testing-library/svelte` | N/A |
 | Integration | `node:test` + real Postgres | — | — |
-
-> **Backend test suite note:** `leads-unsubscribe.test.ts` partially overlaps `routes.test.ts` — consolidate when either file next changes. `events.test.ts` rate-limit test (200 requests) is slow; tag for `--test-name-pattern` exclusion in fast-feedback loops.
 | e2e (API) | Playwright `request` context | — | — |
 | e2e (browser) | — | Playwright (Chromium/FF/WebKit) | Playwright |
 | WCAG | — | axe-core (Playwright + Storybook) | axe-core (Playwright + Lighthouse) |
+
+> **Backend test suite note:** `leads-unsubscribe.test.ts` partially overlaps `routes.test.ts` — consolidate when either file next changes. `events.test.ts` rate-limit test (200 requests) is already tagged (`[slow-rate-limit]`) for `--test-name-pattern` exclusion in fast-feedback loops.
 
 Full proposal: [epics/e2e-testing-harness.md](epics/e2e-testing-harness.md)
 
@@ -206,6 +209,7 @@ Full proposal: [epics/e2e-testing-harness.md](epics/e2e-testing-harness.md)
 - [x] Core route test coverage — events, leads, health, delete (Phase 0.4 P1)
 - [x] Test coverage — service-layer edge cases + utilities (Phase 0.4 P2/P3)
 - [x] Deploy to Fly.io — smoke tests + operational baseline (Phase 4)
+- [x] PG18 baseline schema consolidation (0.8.2; includes index audit scope from 0.8.3)
 - [ ] Geo enrichment (MaxMind GeoLite2)
 - [ ] i18n message catalogue + locale resolution
 - [ ] Runtime assertions (tenant context, rollups, ingest)
