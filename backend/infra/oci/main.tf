@@ -51,7 +51,7 @@ locals {
   
   # Hardcoded availability domain (us-ashburn-1)
   # Retrieved via: oci iam availability-domain list --compartment-id <tenancy-ocid>
-  availability_domain = "saEG:US-ASHBURN-AD-3"
+  availability_domain = "saEG:US-ASHBURN-AD-2"
 }
 
 # ---------------------------------------------------------------------------
