@@ -24,6 +24,7 @@
   @media (max-width: 30rem) {
     width: 100%;
     flex: 1 1 auto;
+
     // display: none !important; // Removed to show on mobile
   }
 }
@@ -67,14 +68,15 @@
   align-items: center;
   justify-content: center;
   align-self: center;
+
   /* Fix for flex item collapse when parent has stretch */
   cursor: crosshair;
   touch-action: none;
+
   // box-shadow: $shadow-inset-outline,
   // $shadow-viewer-depth;
 
   // mask-image forces clipping to the border-radius even with composited children.
-  -webkit-mask-image: linear-gradient(#000, #000);
   mask-image: linear-gradient(#000, #000);
 }
 

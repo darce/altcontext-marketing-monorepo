@@ -1,7 +1,7 @@
 (() => {
   // src/assets/telemetry.ts
   var ANON_ID_KEY = "altctx_anon_id";
-  var backendUrl = true ? "" : "";
+  var backendUrl = true ? "https://test.backend.altcontext.com" : "";
   var getAnonId = () => {
     let id = localStorage.getItem(ANON_ID_KEY);
     if (!id) {
@@ -13,6 +13,20 @@
     }
     return id;
   };
+  var getUtmParams = () => {
+    try {
+      const params = new URLSearchParams(location.search);
+      const utm = {};
+      const keys = ["source", "medium", "campaign", "term", "content"];
+      for (const key of keys) {
+        const val = params.get(`utm_${key}`);
+        if (val) utm[key] = val;
+      }
+      return Object.keys(utm).length > 0 ? utm : void 0;
+    } catch {
+      return void 0;
+    }
+  };
   var sendBeacon = (eventType, props) => {
     if (!backendUrl) {
       return;
@@ -21,7 +35,9 @@
       anonId: getAnonId(),
       eventType,
       path: location.pathname,
+      referrer: document.referrer || void 0,
       timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+      utm: getUtmParams(),
       ...props && { props }
     });
     const sendBeaconFn = navigator.sendBeacon;
@@ -182,6 +198,7 @@
           email,
           anonId: getAnonId(),
           path: location.pathname,
+          utm: getUtmParams(),
           honeypot
         })
       }).then((res) => {

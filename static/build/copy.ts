@@ -176,12 +176,12 @@ const parseRuntimeMetadata = (): RuntimeMetadataEntry[] => {
       atlas: hasLegacyFile
         ? { file: atlasFile as string }
         : {
-          files: {
-            low: (atlasFiles as { low: string }).low,
-            mid: (atlasFiles as { mid: string }).mid,
-            high: (atlasFiles as { high: string }).high,
+            files: {
+              low: (atlasFiles as { low: string }).low,
+              mid: (atlasFiles as { mid: string }).mid,
+              high: (atlasFiles as { high: string }).high,
+            },
           },
-        },
     };
   });
 };
@@ -237,7 +237,7 @@ const copyReferencedImages = (): void => {
 
   console.log(
     `🖼️ Copied ${uniqueFiles.length} referenced images ` +
-    `(${(totalBytes / 1024 / 1024).toFixed(2)} MB) to dist/input-images`,
+      `(${(totalBytes / 1024 / 1024).toFixed(2)} MB) to dist/input-images`,
   );
 };
 

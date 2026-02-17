@@ -5,7 +5,7 @@ on:
     branches:
       - main
     paths:
-      - frontend/**
+      - static/**
       - .github/workflows/pages.yml
   workflow_dispatch:
 
@@ -21,6 +21,9 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      BACKEND_URL: https://marketing-altcontext.fly.dev
+      INGEST_API_KEY: ${{ secrets.INGEST_API_KEY }}
 
     steps:
       - name: Checkout
@@ -31,13 +34,22 @@ jobs:
         with:
           enablement: true
 
+      - name: Install dependencies
+        run: npm ci
+        working-directory: static
+
+      - name: Build
+        run: npm run build
+        working-directory: static
+
       - name: Validate committed dist integrity
-        run: node frontend/build/verify-dist.mjs
+        run: node build/verify-dist.mjs
+        working-directory: static
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
         with:
-          path: frontend/dist
+          path: static/dist
 
   deploy:
     needs: build

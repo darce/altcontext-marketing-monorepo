@@ -3,10 +3,12 @@
 
 const ANON_ID_KEY = "altctx_anon_id";
 
-// BACKEND_URL is injected at build time via esbuild --define
+// BACKEND_URL and INGEST_API_KEY are injected at build time via esbuild --define
 declare const BACKEND_URL: string;
+declare const INGEST_API_KEY: string;
 
 const backendUrl = typeof BACKEND_URL === "string" ? BACKEND_URL : "";
+const ingestApiKey = typeof INGEST_API_KEY === "string" ? INGEST_API_KEY : "";
 
 // Get or create stable anonymous visitor ID
 const getAnonId = (): string => {
@@ -22,10 +24,27 @@ const getAnonId = (): string => {
   return id;
 };
 
+// Get UTM parameters from query string
+const getUtmParams = (): Record<string, string> | undefined => {
+  try {
+    const params = new URLSearchParams(location.search);
+    const utm: Record<string, string> = {};
+    const keys = ["source", "medium", "campaign", "term", "content"];
+    for (const key of keys) {
+      const val = params.get(`utm_${key}`);
+      if (val) utm[key] = val;
+    }
+    return Object.keys(utm).length > 0 ? utm : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
 // Send non-blocking beacon via navigator.sendBeacon or fetch with keepalive
 const sendBeacon = (
   eventType: string,
   props?: Record<string, unknown>,
+  traffic?: Record<string, unknown>,
 ): void => {
   if (!backendUrl) {
     return;
@@ -35,23 +54,34 @@ const sendBeacon = (
     anonId: getAnonId(),
     eventType,
     path: location.pathname,
+    referrer: document.referrer || undefined,
     timestamp: new Date().toISOString(),
+    utm: getUtmParams(),
     ...(props && { props }),
+    ...(traffic && { traffic }),
   });
 
-  const sendBeaconFn = navigator.sendBeacon;
-  if (typeof sendBeaconFn === "function") {
-    const blob = new Blob([payload], { type: "application/json" });
-    sendBeaconFn.call(navigator, `${backendUrl}/v1/events`, blob);
-  } else {
+  // Prefer fetch with keepalive as it supports custom headers (for API key)
+  if (typeof fetch === "function") {
     fetch(`${backendUrl}/v1/events`, {
       method: "POST",
       body: payload,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(ingestApiKey && { "x-api-key": ingestApiKey }),
+      },
       keepalive: true,
     }).catch(() => {
       // Silently fail — don't block page
     });
+    return;
+  }
+
+  // Fallback to sendBeacon (no custom headers support)
+  const sendBeaconFn = navigator.sendBeacon;
+  if (typeof sendBeaconFn === "function") {
+    const blob = new Blob([payload], { type: "application/json" });
+    sendBeaconFn.call(navigator, `${backendUrl}/v1/events`, blob);
   }
 };
 
@@ -69,7 +99,7 @@ const trackEngagement = (): void => {
     () => {
       if (document.hidden) {
         const engagedTimeMs = Date.now() - engagementStartMs;
-        sendBeacon("engagement", { engagedTimeMs });
+        sendBeacon("engagement", undefined, { engagedTimeMs });
       } else {
         engagementStartMs = Date.now();
       }
@@ -77,18 +107,23 @@ const trackEngagement = (): void => {
     { once: false },
   );
 
-  // Also send on unload if still visible
-  window.addEventListener("unload", () => {
-    if (!document.hidden) {
-      const engagedTimeMs = Date.now() - engagementStartMs;
-      sendBeacon("engagement", { engagedTimeMs });
-    }
-  });
+  // Also send on pagehide if still visible (B1: unload -> pagehide)
+  window.addEventListener(
+    "pagehide",
+    () => {
+      if (!document.hidden) {
+        const engagedTimeMs = Date.now() - engagementStartMs;
+        sendBeacon("engagement", undefined, { engagedTimeMs });
+      }
+    },
+    { once: true },
+  );
 };
 
 // Track scroll depth via sentinel elements
 const trackScrollDepth = (): void => {
   let maxScrollDepthPercent = 0;
+  let sent = false;
 
   const checkScrollDepth = (): void => {
     const scrollPercentage =
@@ -100,19 +135,24 @@ const trackScrollDepth = (): void => {
 
   document.addEventListener("scroll", checkScrollDepth, { passive: true });
 
+  const sendScrollBeacon = (): void => {
+    if (!sent && maxScrollDepthPercent > 0) {
+      sent = true;
+      sendBeacon("scroll_depth", undefined, {
+        scrollDepthPercent: Math.round(maxScrollDepthPercent),
+      });
+    }
+  };
+
   // Send scroll depth on visibility change
   document.addEventListener("visibilitychange", () => {
-    if (document.hidden && maxScrollDepthPercent > 0) {
-      sendBeacon("scroll_depth", { maxDepthPercent: maxScrollDepthPercent });
+    if (document.hidden) {
+      sendScrollBeacon();
     }
   });
 
-  // And on unload
-  window.addEventListener("unload", () => {
-    if (maxScrollDepthPercent > 0) {
-      sendBeacon("scroll_depth", { maxDepthPercent: maxScrollDepthPercent });
-    }
-  });
+  // And on pagehide (B1: unload -> pagehide)
+  window.addEventListener("pagehide", sendScrollBeacon, { once: true });
 };
 
 // Track CTA (face-pose viewer) interaction
@@ -123,6 +163,7 @@ const trackFacePoseInteraction = (): void => {
   }
 
   let interactionStartMs: number | null = null;
+  let sent = false;
 
   const startInteraction = (): void => {
     if (!interactionStartMs) {
@@ -135,18 +176,26 @@ const trackFacePoseInteraction = (): void => {
   faceContainer.addEventListener("pointerdown", startInteraction);
   faceContainer.addEventListener("touchstart", startInteraction);
 
-  // Send on unload if interaction started
-  window.addEventListener("unload", () => {
-    if (interactionStartMs) {
-      const scrubDurationMs = Date.now() - interactionStartMs;
-      sendBeacon("face_pose_scrub", { scrubDurationMs });
-    }
-  });
+  // Send on pagehide if interaction started (B1: unload -> pagehide)
+  window.addEventListener(
+    "pagehide",
+    () => {
+      if (!sent && interactionStartMs) {
+        sent = true;
+        const scrubDurationMs = Date.now() - interactionStartMs;
+        sendBeacon("face_pose_scrub", { scrubDurationMs });
+      }
+    },
+    { once: true },
+  );
 };
 
 // Capture Web Vitals using PerformanceObserver
 const trackWebVitals = (): void => {
   const vitals: Record<string, number> = {};
+  let clsValue = 0;
+  let worstInp = 0;
+  let sent = false;
 
   // FCP, LCP, INP, CLS via PerformanceObserver
   if ("PerformanceObserver" in window) {
@@ -163,17 +212,15 @@ const trackWebVitals = (): void => {
           (renderTime || loadTime || lastEntry.startTime) as number,
         );
       });
-      lcpObserver.observe({ entryTypes: ["largest-contentful-paint"] });
+      lcpObserver.observe({ type: "largest-contentful-paint", buffered: true });
     } catch {
       // Not all browsers support LCP
     }
 
-    // Cumulative Layout Shift
+    // Cumulative Layout Shift (B3: Accumulate outside callback)
     try {
       const clsObserver = new PerformanceObserver((entryList) => {
-        const entries = entryList.getEntries();
-        let clsValue = 0;
-        for (const entry of entries) {
+        for (const entry of entryList.getEntries()) {
           const hadRecentInput = (
             entry as unknown as { hadRecentInput?: boolean }
           ).hadRecentInput;
@@ -184,47 +231,67 @@ const trackWebVitals = (): void => {
         }
         vitals.clsScore = Math.round(clsValue * 1000) / 1000;
       });
-      clsObserver.observe({ entryTypes: ["layout-shift"] });
+      clsObserver.observe({ type: "layout-shift", buffered: true });
     } catch {
       // No CLS support
     }
 
-    // Interaction to Next Paint (INP)
+    // Interaction to Next Paint (INP) (A2: Track worst interacting duration)
     try {
       const inpObserver = new PerformanceObserver((entryList) => {
-        const entries = entryList.getEntries();
-        const lastEntry = entries[entries.length - 1];
-        const processingDuration = (
-          lastEntry as unknown as { processingDuration?: number }
-        ).processingDuration;
-        vitals.inpMs = Math.round(processingDuration || 0);
+        for (const entry of entryList.getEntries()) {
+          if (entry.duration > worstInp) {
+            worstInp = entry.duration;
+            vitals.inpMs = Math.round(worstInp);
+          }
+        }
       });
-      inpObserver.observe({ entryTypes: ["event"] });
+      inpObserver.observe({ type: "interaction", buffered: true });
     } catch {
       // No INP support
     }
+
+    // First Contentful Paint
+    try {
+      const paintObserver = new PerformanceObserver((entryList) => {
+        for (const entry of entryList.getEntries()) {
+          if (entry.name === "first-contentful-paint") {
+            vitals.fcpMs = Math.round(entry.startTime);
+          }
+        }
+      });
+      paintObserver.observe({ type: "paint", buffered: true });
+    } catch {
+      // No paint observer support
+    }
   }
 
-  // First Contentful Paint and TTFB via PerformanceTiming
-  const perfData = performance.timing;
-  if (perfData.responseStart && perfData.navigationStart) {
-    vitals.ttfbMs = perfData.responseStart - perfData.navigationStart;
+  // TTFB via PerformanceNavigationTiming (A1: Modern API)
+  const navEntry = performance.getEntriesByType("navigation")[0] as
+    | PerformanceNavigationTiming
+    | undefined;
+  if (navEntry) {
+    vitals.ttfbMs = Math.round(navEntry.responseStart);
+  } else {
+    // Fallback to legacy PerformanceTiming (deprecated)
+    const perfData = performance.timing;
+    if (perfData.responseStart && perfData.navigationStart) {
+      vitals.ttfbMs = perfData.responseStart - perfData.navigationStart;
+    }
   }
+
+  const sendVitalsBeacon = (): void => {
+    if (!sent && Object.keys(vitals).length > 0) {
+      sent = true;
+      sendBeacon("cwv", undefined, { webVitals: vitals });
+    }
+  };
 
   // Send vitals beacon after LCP settles (approx 2.5s)
-  const vitalsTimeout = setTimeout(() => {
-    if (Object.keys(vitals).length > 0) {
-      sendBeacon("cwv", { webVitals: vitals });
-    }
-  }, 2500);
+  setTimeout(sendVitalsBeacon, 2500);
 
-  // Also send on unload
-  window.addEventListener("unload", () => {
-    clearTimeout(vitalsTimeout);
-    if (Object.keys(vitals).length > 0) {
-      sendBeacon("cwv", { webVitals: vitals });
-    }
-  });
+  // Also send on pagehide (B1: unload -> pagehide)
+  window.addEventListener("pagehide", sendVitalsBeacon, { once: true });
 };
 
 // JS-enhance email form with inline submit
@@ -245,7 +312,13 @@ const enhanceEmailForm = (): void => {
     if (!emailInput) return;
 
     const email = emailInput.value.trim();
-    const honeypot = honeypotInput?.value.trim() ?? "";
+    const honeypot = honeypotInput?.value.trim() || undefined;
+
+    // Disable button to prevent double-submit (A3)
+    const submitBtn = form.querySelector(
+      "button[type=submit]",
+    ) as HTMLButtonElement | null;
+    if (submitBtn) submitBtn.disabled = true;
 
     // Fire beacon that form was submitted
     sendBeacon("form_submit", { formName: "email_capture" });
@@ -253,11 +326,15 @@ const enhanceEmailForm = (): void => {
     // Send to backend
     fetch(`${backendUrl}/v1/leads/capture`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(ingestApiKey && { "x-api-key": ingestApiKey }),
+      },
       body: JSON.stringify({
         email,
         anonId: getAnonId(),
         path: location.pathname,
+        utm: getUtmParams(),
         honeypot,
       }),
     })
@@ -270,10 +347,12 @@ const enhanceEmailForm = (): void => {
             '<p class="email-capture-success">Thanks! We\'ll be in touch.</p>';
           form.replaceWith(successDiv);
         } else {
+          if (submitBtn) submitBtn.disabled = false;
           showFormError(form, "Something went wrong. Please try again.");
         }
       })
       .catch(() => {
+        if (submitBtn) submitBtn.disabled = false;
         showFormError(form, "Network error. Please try again.");
       });
   });

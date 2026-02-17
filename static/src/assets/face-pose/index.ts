@@ -461,7 +461,7 @@ const initializeFacePose = async (): Promise<void> => {
       if (
         state.lastInteractionType === "pointer" &&
         now - state.lastInteractionAtMs <
-        GYRO_CONFIG.interactionCoordinationThresholdMs
+          GYRO_CONFIG.interactionCoordinationThresholdMs
       ) {
         return;
       }
