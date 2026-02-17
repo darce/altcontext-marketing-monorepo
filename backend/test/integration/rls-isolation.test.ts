@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 describe("RLS Isolation", () => {
   const tenantA = "00000000-0000-4000-a000-00000000000a";
   const tenantB = "00000000-0000-4000-a000-00000000000b";
+  const tenantSchemaOnly = "00000000-0000-4000-a000-0000000000aa";
   const visitorA = randomUUID();
   const visitorB = randomUUID();
   const sessionA = randomUUID();
@@ -67,6 +68,10 @@ describe("RLS Isolation", () => {
       await client.query(
         "INSERT INTO tenants (id, name, slug, updated_at) VALUES ($1, 'Tenant B', 'tenant-b', now()) ON CONFLICT (id) DO NOTHING",
         [tenantB],
+      );
+      await client.query(
+        "INSERT INTO tenants (id, name, slug, updated_at) VALUES ($1, 'Schema Tenant', 'tenant-schema-only', now()) ON CONFLICT (id) DO NOTHING",
+        [tenantSchemaOnly],
       );
     });
 
@@ -185,6 +190,85 @@ describe("RLS Isolation", () => {
       const { rows } = await client.query("SELECT id FROM visitors");
       assert.equal(rows.length, 0);
     } finally {
+      client.release();
+    }
+  });
+
+  it("set_tenant_context validates tenants in the active schema", async () => {
+    const client = await pool.connect();
+    try {
+      const { rows: schemaRows } = await client.query<{
+        current_schema: string;
+      }>("SELECT current_schema()");
+      const activeSchema = schemaRows[0]?.current_schema ?? "public";
+
+      await client.query("BEGIN");
+      try {
+        await client.query("SET ROLE app_user");
+        await client.query(
+          "SELECT public.set_tenant_context($1::uuid, $2::text)",
+          [tenantSchemaOnly, activeSchema],
+        );
+
+        if (activeSchema === "public") {
+          return;
+        }
+
+        await assert.rejects(
+          client.query("SELECT public.set_tenant_context($1::uuid, 'public')", [
+            tenantSchemaOnly,
+          ]),
+          (error: unknown) => {
+            const pgError = error as { code?: string; message?: string };
+            return (
+              pgError.code === "22023" ||
+              /unknown tenant/i.test(pgError.message ?? "")
+            );
+          },
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
+    } finally {
+      await client.query("RESET ROLE").catch(() => {});
+      client.release();
+    }
+  });
+
+  it("app_user cannot set tenant GUC directly on PG18+", async (t) => {
+    const client = await pool.connect();
+    try {
+      const { rows } = await client.query<{ version_num: string }>(
+        "SELECT current_setting('server_version_num') AS version_num",
+      );
+      const serverVersionNum = Number(rows[0]?.version_num ?? "0");
+      if (serverVersionNum < 180000) {
+        t.skip(
+          "PG18+ only: parameter ACLs are not enforced on this local version",
+        );
+        return;
+      }
+
+      await client.query("BEGIN");
+      try {
+        await client.query("SET ROLE app_user");
+        await assert.rejects(
+          client.query("SELECT set_config('app.current_tenant_id', $1, true)", [
+            tenantA,
+          ]),
+          (error: unknown) => {
+            const pgError = error as { code?: string; message?: string };
+            return (
+              pgError.code === "42501" ||
+              /permission denied|not allowed/i.test(pgError.message ?? "")
+            );
+          },
+        );
+      } finally {
+        await client.query("ROLLBACK");
+      }
+    } finally {
+      await client.query("RESET ROLE").catch(() => {});
       client.release();
     }
   });

@@ -1,7 +1,8 @@
 import type { SqlQuery } from "./db.js";
 import { rawSql, emptySql } from "./db.js";
+import { resolveDatabaseSchema } from "./database-schema.js";
 
-const databaseSchema = process.env.DATABASE_SCHEMA || "public";
+const databaseSchema = resolveDatabaseSchema();
 
 export const quoteIdentifier = (value: string): string =>
   `"${value.replaceAll('"', '""')}"`;

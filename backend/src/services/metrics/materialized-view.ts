@@ -1,10 +1,14 @@
 import type { PoolClient } from "pg";
 
 import { env } from "../../config/env.js";
+import { resolveDatabaseSchema } from "../../lib/database-schema.js";
 import { query, rawSql, sql } from "../../lib/db.js";
 import { quoteIdentifier, tableRef } from "../../lib/sql.js";
 
-const databaseSchema = process.env.DATABASE_SCHEMA || "public";
+const databaseSchema = resolveDatabaseSchema({
+  databaseUrl: env.DATABASE_URL,
+  explicitSchema: process.env.DATABASE_SCHEMA,
+});
 
 export interface MaterializedSummaryRow {
   day: Date;

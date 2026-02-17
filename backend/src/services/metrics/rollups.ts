@@ -399,7 +399,6 @@ const computeDailyMetrics = async (
 
   const metricsInsertSql = sql`
         INSERT INTO ${METRICS_ROLLUP_TABLE} (
-          "id",
           "tenant_id",
           "property_id",
           "day",
@@ -419,7 +418,6 @@ const computeDailyMetrics = async (
           "generated_at",
           "updated_at"
         ) VALUES (
-          ${crypto.randomUUID()},
           ${tenantId},
           ${propertyId},
           ${dayStart},
@@ -459,7 +457,6 @@ const computeDailyMetrics = async (
 
   const ingestInsertSql = sql`
         INSERT INTO ${INGEST_ROLLUP_TABLE} (
-          "id",
           "tenant_id",
           "property_id",
           "day",
@@ -472,7 +469,6 @@ const computeDailyMetrics = async (
           "generated_at",
           "updated_at"
         ) VALUES (
-          ${crypto.randomUUID()},
           ${tenantId},
           ${propertyId},
           ${dayStart},

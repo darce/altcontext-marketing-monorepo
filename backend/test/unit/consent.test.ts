@@ -71,7 +71,7 @@ test("applyConsentStatus does not update lead when status is unchanged", async (
       if (text.includes('SELECT "consent_status"')) {
         return { rows: [{ consent_status: ConsentStatus.withdrawn }] };
       }
-      if (text.includes('INSERT INTO "consent_events"')) {
+      if (text.includes("INSERT INTO") && text.includes('"consent_events"')) {
         return { rows: [{ id: "event-1" }] };
       }
       return { rows: [] };
@@ -119,8 +119,9 @@ test("applyConsentStatus no-ops when lead does not exist", async () => {
     "unknown",
   );
 
-  const insertQuery = queries.find((q) =>
-    q.text.includes('INSERT INTO "consent_events"'),
+  const insertQuery = queries.find(
+    (q) =>
+      q.text.includes("INSERT INTO") && q.text.includes('"consent_events"'),
   );
   assert.equal(insertQuery, undefined);
 });

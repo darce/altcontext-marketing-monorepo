@@ -5,7 +5,7 @@ Infrastructure-as-code for deploying the marketing backend to Oracle Cloud Infra
 ## Architecture
 
 - **Compute**: VM.Standard.E2.1.Micro (AMD, 1 GB RAM, 50 GB boot)
-- **Database**: PostgreSQL 17 (containerized, same VM)
+- **Database**: PostgreSQL 18 (containerized, same VM)
 - **Networking**: VCN with public subnet + Internet Gateway
 - **Security**: Security List (SSH + HTTP/HTTPS), fail2ban, automatic security updates
 - **Runtime**: Docker + Docker Compose

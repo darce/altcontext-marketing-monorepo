@@ -122,8 +122,7 @@ model Visitor {
   formSubmissions FormSubmission[]
 
   @@unique([tenantId, anonId])
-  @@index([lastSeenAt], map: "visitors_last_seen_at_idx")
-  @@index([tenantId], map: "visitors_tenant_id_idx")
+  @@index([tenantId, lastSeenAt], map: "visitors_tenant_id_last_seen_at_idx")
   @@map("visitors")
 }
 
@@ -149,9 +148,8 @@ model Session {
   events          Event[]
   formSubmissions FormSubmission[]
 
-  @@index([visitorId, startedAt], map: "sessions_visitor_id_started_at_idx")
-  @@index([visitorId, lastEventAt], map: "sessions_visitor_id_last_event_at_idx")
-  @@index([tenantId], map: "sessions_tenant_id_idx")
+  @@index([tenantId, visitorId, startedAt], map: "sessions_tenant_id_visitor_id_started_at_idx")
+  @@index([tenantId, visitorId, lastEventAt], map: "sessions_tenant_id_visitor_id_last_event_at_idx")
   @@map("sessions")
 }
 
@@ -181,13 +179,12 @@ model Event {
   session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
   @@unique([tenantId, dedupeKey])
-  @@index([visitorId, timestamp], map: "events_visitor_id_timestamp_idx")
-  @@index([eventType, timestamp], map: "events_event_type_timestamp_idx")
-  @@index([path, timestamp], map: "events_path_timestamp_idx")
-  @@index([sessionId, timestamp], map: "events_session_id_timestamp_idx")
-  @@index([propertyId, timestamp], map: "events_property_id_timestamp_idx")
-  @@index([trafficSource, timestamp], map: "events_traffic_source_timestamp_idx")
-  @@index([tenantId], map: "events_tenant_id_idx")
+  @@index([tenantId, visitorId, timestamp], map: "events_tenant_id_visitor_id_timestamp_idx")
+  @@index([tenantId, eventType, timestamp], map: "events_tenant_id_event_type_timestamp_idx")
+  @@index([tenantId, path, timestamp], map: "events_tenant_id_path_timestamp_idx")
+  @@index([tenantId, sessionId, timestamp], map: "events_tenant_id_session_id_timestamp_idx")
+  @@index([tenantId, propertyId, timestamp], map: "events_tenant_id_property_id_timestamp_idx")
+  @@index([tenantId, trafficSource, timestamp], map: "events_tenant_id_traffic_source_timestamp_idx")
   @@map("events")
 }
 
@@ -195,7 +192,8 @@ model Lead {
   id              String        @id @default(uuid())
   tenantId        String        @map("tenant_id") @db.Uuid
   emailNormalized String        @map("email_normalized") @db.VarChar(320)
-  emailDomain     String?       @map("email_domain") @db.VarChar(255)
+  // Generated in DB: split_part(email_normalized, '@', 2)
+  emailDomain     String?       @map("email_domain") @db.VarChar(255) @ignore
   consentStatus   ConsentStatus @default(pending) @map("consent_status")
   firstCapturedAt DateTime      @default(now()) @map("first_captured_at")
   lastCapturedAt  DateTime      @default(now()) @map("last_captured_at")
@@ -209,8 +207,7 @@ model Lead {
   consentEvents ConsentEvent[]
 
   @@unique([tenantId, emailNormalized])
-  @@index([lastCapturedAt], map: "leads_last_captured_at_idx")
-  @@index([tenantId], map: "leads_tenant_id_idx")
+  @@index([tenantId, lastCapturedAt], map: "leads_tenant_id_last_captured_at_idx")
   @@map("leads")
 }
 
@@ -228,10 +225,9 @@ model LeadIdentity {
   lead    Lead    @relation(fields: [leadId], references: [id], onDelete: Cascade)
   visitor Visitor @relation(fields: [visitorId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, leadId, visitorId, linkSource])
-  @@index([leadId, linkedAt], map: "lead_identities_lead_id_linked_at_idx")
-  @@index([visitorId, linkedAt], map: "lead_identities_visitor_id_linked_at_idx")
-  @@index([tenantId], map: "lead_identities_tenant_id_idx")
+  @@unique([tenantId, leadId, visitorId, linkSource], map: "lead_identities_tenant_id_lead_visitor_source_key")
+  @@index([tenantId, leadId, linkedAt], map: "lead_identities_tenant_id_lead_id_linked_at_idx")
+  @@index([tenantId, visitorId, linkedAt], map: "lead_identities_tenant_id_visitor_id_linked_at_idx")
   @@map("lead_identities")
 }
 
@@ -252,10 +248,9 @@ model FormSubmission {
   visitor Visitor? @relation(fields: [visitorId], references: [id], onDelete: SetNull)
   session Session? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
 
-  @@index([leadId, submittedAt], map: "form_submissions_lead_id_submitted_at_idx")
-  @@index([visitorId, submittedAt], map: "form_submissions_visitor_id_submitted_at_idx")
-  @@index([sessionId, submittedAt], map: "form_submissions_session_id_submitted_at_idx")
-  @@index([tenantId], map: "form_submissions_tenant_id_idx")
+  @@index([tenantId, leadId, submittedAt], map: "form_submissions_tenant_id_lead_id_submitted_at_idx")
+  @@index([tenantId, visitorId, submittedAt], map: "form_submissions_tenant_id_visitor_id_submitted_at_idx")
+  @@index([tenantId, sessionId, submittedAt], map: "form_submissions_tenant_id_session_id_submitted_at_idx")
   @@map("form_submissions")
 }
 
@@ -272,8 +267,7 @@ model ConsentEvent {
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
 
-  @@index([leadId, timestamp], map: "consent_events_lead_id_timestamp_idx")
-  @@index([tenantId], map: "consent_events_tenant_id_idx")
+  @@index([tenantId, leadId, timestamp], map: "consent_events_tenant_id_lead_id_timestamp_idx")
   @@map("consent_events")
 }
 
@@ -289,9 +283,8 @@ model IngestRejection {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@index([propertyId, occurredAt], map: "ingest_rejections_property_id_occurred_at_idx")
-  @@index([endpoint, occurredAt], map: "ingest_rejections_endpoint_occurred_at_idx")
-  @@index([tenantId], map: "ingest_rejections_tenant_id_idx")
+  @@index([tenantId, propertyId, occurredAt], map: "ingest_rejections_tenant_id_property_id_occurred_at_idx")
+  @@index([tenantId, endpoint, occurredAt], map: "ingest_rejections_tenant_id_endpoint_occurred_at_idx")
   @@map("ingest_rejections")
 }
 
@@ -319,9 +312,8 @@ model DailyMetricRollup {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, propertyId, day])
-  @@index([day], map: "daily_metric_rollups_day_idx")
-  @@index([tenantId], map: "daily_metric_rollups_tenant_id_idx")
+  @@unique([tenantId, propertyId, day], map: "daily_metric_rollups_tenant_id_property_day_key")
+  @@index([tenantId, day], map: "daily_metric_rollups_tenant_id_day_idx")
   @@map("daily_metric_rollups")
 }
 
@@ -342,8 +334,7 @@ model DailyIngestRollup {
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 
-  @@unique([tenantId, propertyId, day])
-  @@index([day], map: "daily_ingest_rollups_day_idx")
-  @@index([tenantId], map: "daily_ingest_rollups_tenant_id_idx")
+  @@unique([tenantId, propertyId, day], map: "daily_ingest_rollups_tenant_id_property_day_key")
+  @@index([tenantId, day], map: "daily_ingest_rollups_tenant_id_day_idx")
   @@map("daily_ingest_rollups")
 }

@@ -54,7 +54,8 @@ test("POST /v1/events accepts valid event and persists it", async () => {
 
   // Verify persistence
   const event = await prisma.event.findFirst({
-    where: { visitor: { anonId: payload.anonId } },
+    where: { eventType: payload.eventType, path: payload.path },
+    orderBy: { createdAt: "desc" },
   });
   assert.ok(event);
   assert.equal(event.eventType, payload.eventType);

@@ -1,5 +1,9 @@
 import pg from "pg";
 import { env } from "../config/env.js";
+import {
+  resolveDatabaseSchema,
+  toSearchPathOptions,
+} from "./database-schema.js";
 
 // Ensure the pg driver serialises and parses Date values in UTC so that
 // `date` columns are not shifted by the server's local-time offset.
@@ -11,7 +15,21 @@ pg.defaults.parseInputDatesAsUTC = true;
 // round-trip correctly regardless of the host machine's timezone.
 pg.types.setTypeParser(1114, (str: string) => new Date(str + "Z"));
 
-export const pool = new pg.Pool({ connectionString: env.DATABASE_URL });
+export const databaseSchema = resolveDatabaseSchema({
+  databaseUrl: env.DATABASE_URL,
+  explicitSchema: process.env.DATABASE_SCHEMA,
+});
+
+const resolvePoolConfig = (): pg.PoolConfig => {
+  const config: pg.PoolConfig = { connectionString: env.DATABASE_URL };
+  const options = toSearchPathOptions(databaseSchema);
+  if (options) {
+    config.options = options;
+  }
+  return config;
+};
+
+export const pool = new pg.Pool(resolvePoolConfig());
 
 // Initial role for all connections
 pool.on("connect", (client) => {
@@ -93,10 +111,10 @@ export const withTenant = async <T>(
     await client.query("BEGIN");
     // Ensure we are app_user (in case connection was leaked or reset)
     await client.query("SET ROLE app_user");
-    // Set local session variable for RLS (MT-2) and auditing
-    // Note: SET LOCAL doesn't support parameters, so we use set_config
-    await client.query("SELECT set_config('app.current_tenant_id', $1, true)", [
+    // Set tenant context for RLS via DB function and active schema.
+    await client.query("SELECT public.set_tenant_context($1::uuid, $2::text)", [
       tenantId,
+      databaseSchema,
     ]);
     const result = await fn(client);
     await client.query("COMMIT");

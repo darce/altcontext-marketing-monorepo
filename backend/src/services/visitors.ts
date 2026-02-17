@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { env } from "../config/env.js";
@@ -148,7 +147,6 @@ const createSession = async (
     tx,
     sql`
       INSERT INTO ${SESSIONS_TABLE} (
-        "id",
         "tenant_id",
         "visitor_id",
         "started_at",
@@ -163,7 +161,6 @@ const createSession = async (
         "created_at",
         "updated_at"
       ) VALUES (
-        ${randomUUID()},
         ${tenantId},
         ${visitorId},
         ${occurredAt},
@@ -214,7 +211,6 @@ export const ensureVisitorSession = async (
     tx,
     sql`
       INSERT INTO ${VISITORS_TABLE} (
-        "id",
         "tenant_id",
         "anon_id",
         "first_seen_at",
@@ -226,7 +222,6 @@ export const ensureVisitorSession = async (
         "created_at",
         "updated_at"
       ) VALUES (
-        ${randomUUID()},
         ${input.tenantId},
         ${input.anonId},
         ${input.occurredAt},

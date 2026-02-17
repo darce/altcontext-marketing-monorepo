@@ -1,8 +1,7 @@
-import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { toJsonValue } from "../lib/json.js";
-import { normalizeEmail, toEmailDomain } from "../lib/normalize.js";
+import { normalizeEmail } from "../lib/normalize.js";
 import type { RequestContext } from "../lib/request-context.js";
 import {
   LinkSource,
@@ -33,6 +32,7 @@ interface LeadRow {
   source_channel: string | null;
   created_at: Date;
   updated_at: Date;
+  is_new?: boolean;
 }
 
 const mapLead = (row: LeadRow): LeadType => ({
@@ -73,7 +73,6 @@ export const captureLead = async (
   });
 
   const emailNormalized = normalizeEmail(body.email);
-  const emailDomain = toEmailDomain(emailNormalized);
   const sourceChannel = body.sourceChannel ?? null;
   const initialConsent = toConsentStatus(body.consentStatus);
 
@@ -82,10 +81,8 @@ export const captureLead = async (
     tx,
     sql`
       INSERT INTO ${LEADS_TABLE} (
-        "id",
         "tenant_id",
         "email_normalized",
-        "email_domain",
         "source_channel",
         "first_captured_at",
         "last_captured_at",
@@ -93,10 +90,8 @@ export const captureLead = async (
         "created_at",
         "updated_at"
       ) VALUES (
-        ${randomUUID()},
         ${tenantId},
         ${emailNormalized},
-        ${emailDomain},
         ${sourceChannel},
         ${occurredAt},
         ${occurredAt},
@@ -105,11 +100,10 @@ export const captureLead = async (
         NOW()
       )
       ON CONFLICT ("tenant_id", "email_normalized") DO UPDATE SET
-        "email_domain" = ${emailDomain},
         "source_channel" = ${sourceChannel},
         "last_captured_at" = ${occurredAt},
         "updated_at" = NOW()
-      RETURNING *
+      RETURNING *, ("xmax" = 0) AS is_new
     `,
   );
   if (!leadRows[0]) throw new Error("Failed to capture lead");
@@ -165,7 +159,6 @@ export const captureLead = async (
     tx,
     sql`
       INSERT INTO ${FORM_SUBMISSIONS_TABLE} (
-        "id",
         "tenant_id",
         "lead_id",
         "visitor_id",
@@ -176,7 +169,6 @@ export const captureLead = async (
         "payload",
         "created_at"
       ) VALUES (
-        ${randomUUID()},
         ${tenantId},
         ${lead.id},
         ${visitor.id},

@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { env } from "../config/env.js";
@@ -56,14 +55,12 @@ export const linkLeadToVisitor = async (
     tx,
     sql`
       INSERT INTO ${LEAD_IDENTITIES_TABLE} (
-        "id",
         "tenant_id",
         "lead_id",
         "visitor_id",
         "link_source",
         "confidence"
       ) VALUES (
-        ${randomUUID()},
         ${tenantId},
         ${leadId},
         ${visitorId},
@@ -127,8 +124,6 @@ export const linkHeuristicVisitors = async (
     `,
   );
 
-  const linkIds = candidateVisitorIds.map(() => randomUUID());
-
   // createMany equivalent (skipDuplicates)
   // Insert new links if they don't exist
   // We use UNNEST to bulk insert
@@ -136,7 +131,6 @@ export const linkHeuristicVisitors = async (
     tx,
     sql`
       INSERT INTO ${LEAD_IDENTITIES_TABLE} (
-        "id",
         "tenant_id",
         "lead_id",
         "visitor_id",
@@ -144,13 +138,12 @@ export const linkHeuristicVisitors = async (
         "confidence"
       )
       SELECT
-        l_id,
         ${tenantId},
         ${leadId},
         v_id,
         ${LinkSource.same_ip_ua_window},
         0.35
-      FROM UNNEST(${linkIds}::uuid[], ${candidateVisitorIds}::text[]) AS t(l_id, v_id)
+      FROM UNNEST(${candidateVisitorIds}::text[]) AS t(v_id)
       ON CONFLICT ("tenant_id", "lead_id", "visitor_id", "link_source") DO NOTHING
     `,
   );

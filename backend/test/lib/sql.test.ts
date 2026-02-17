@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { resolveDatabaseSchema } from "../../src/lib/database-schema.js";
 import { quoteIdentifier, tableRef, typeRef } from "../../src/lib/sql.js";
 
 test("quoteIdentifier quotes correctly", () => {
@@ -8,9 +9,7 @@ test("quoteIdentifier quotes correctly", () => {
 });
 
 test("tableRef produces schema-qualified reference", () => {
-  // Mocking process.env for the test if needed, but sql.js uses it at module level.
-  // We can just verify the actual output matches the expected based on the environment.
-  const schema = process.env.DATABASE_SCHEMA || "public";
+  const schema = resolveDatabaseSchema();
   const ref = tableRef("visitors");
   assert.equal(ref.text, `"${schema}"."visitors"`);
   assert.equal(ref.values.length, 0);
@@ -20,7 +19,7 @@ test("tableRef produces schema-qualified reference", () => {
 });
 
 test("typeRef produces schema-qualified reference", () => {
-  const schema = process.env.DATABASE_SCHEMA || "public";
+  const schema = resolveDatabaseSchema();
   const ref = typeRef("ConsentStatus");
   assert.equal(ref.text, `"${schema}"."ConsentStatus"`);
   assert.equal(ref.values.length, 0);

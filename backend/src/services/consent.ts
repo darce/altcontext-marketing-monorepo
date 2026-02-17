@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { query, sql } from "../lib/db.js";
@@ -85,14 +84,12 @@ export const applyConsentStatus = async (
     tx,
     sql`
       INSERT INTO ${CONSENT_EVENTS_TABLE} (
-        "id",
         "tenant_id",
         "lead_id",
         "status",
         "source",
         "ip_hash"
       ) VALUES (
-        ${randomUUID()},
         ${tenantId},
         ${leadId},
         ${nextStatus},

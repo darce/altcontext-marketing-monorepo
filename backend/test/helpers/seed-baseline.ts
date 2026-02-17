@@ -1,6 +1,5 @@
 import { pool, query, sql, withOwnerRole } from "../../src/lib/db.js";
 import { tableRef } from "../../src/lib/sql.js";
-import { randomUUID } from "node:crypto";
 import { env } from "../../src/config/env.js";
 
 /**
@@ -16,50 +15,56 @@ const run = async () => {
     env.BOOTSTRAP_TENANT_ID ?? "00000000-0000-4000-a000-000000000001";
 
   await withOwnerRole(async (client) => {
-    const visitorId = randomUUID();
-    const sessionId = randomUUID();
     const oldDate = new Date(Date.now() - 100 * 24 * 60 * 60 * 1000); // 100 days ago
     const recentDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000); // 1 day ago
 
     console.log("Seeding visitor...");
-    await query(
+    const { rows: visitorRows } = await query<{ id: string }>(
       client,
       sql`
-      INSERT INTO ${VISITORS_TABLE} (id, tenant_id, anon_id, created_at, updated_at)
-      VALUES (${visitorId}, ${tenantId}, 'seed-visitor', ${oldDate}, ${oldDate})
+      INSERT INTO ${VISITORS_TABLE} (tenant_id, anon_id, created_at, updated_at)
+      VALUES (${tenantId}, 'seed-visitor', ${oldDate}, ${oldDate})
+      RETURNING id
     `,
     );
+    const visitorId = visitorRows[0]?.id;
+    if (!visitorId) throw new Error("Failed to seed visitor");
 
     console.log("Seeding old session and event...");
-    await query(
+    const { rows: sessionRows } = await query<{ id: string }>(
       client,
       sql`
-      INSERT INTO ${SESSIONS_TABLE} (id, tenant_id, visitor_id, started_at, updated_at)
-      VALUES (${sessionId}, ${tenantId}, ${visitorId}, ${oldDate}, ${oldDate})
+      INSERT INTO ${SESSIONS_TABLE} (tenant_id, visitor_id, started_at, updated_at)
+      VALUES (${tenantId}, ${visitorId}, ${oldDate}, ${oldDate})
+      RETURNING id
     `,
     );
+    const sessionId = sessionRows[0]?.id;
+    if (!sessionId) throw new Error("Failed to seed old session");
     await query(
       client,
       sql`
-      INSERT INTO ${EVENTS_TABLE} (id, tenant_id, visitor_id, session_id, event_type, timestamp, property_id)
-      VALUES (${randomUUID()}, ${tenantId}, ${visitorId}, ${sessionId}, 'page_view', ${oldDate}, 'p1')
+      INSERT INTO ${EVENTS_TABLE} (tenant_id, visitor_id, session_id, event_type, timestamp, property_id)
+      VALUES (${tenantId}, ${visitorId}, ${sessionId}, 'page_view', ${oldDate}, 'p1')
     `,
     );
 
     console.log("Seeding recent session and event...");
-    const recentSessionId = randomUUID();
-    await query(
+    const { rows: recentSessionRows } = await query<{ id: string }>(
       client,
       sql`
-      INSERT INTO ${SESSIONS_TABLE} (id, tenant_id, visitor_id, started_at, updated_at)
-      VALUES (${recentSessionId}, ${tenantId}, ${visitorId}, ${recentDate}, ${recentDate})
+      INSERT INTO ${SESSIONS_TABLE} (tenant_id, visitor_id, started_at, updated_at)
+      VALUES (${tenantId}, ${visitorId}, ${recentDate}, ${recentDate})
+      RETURNING id
     `,
     );
+    const recentSessionId = recentSessionRows[0]?.id;
+    if (!recentSessionId) throw new Error("Failed to seed recent session");
     await query(
       client,
       sql`
-      INSERT INTO ${EVENTS_TABLE} (id, tenant_id, visitor_id, session_id, event_type, timestamp, property_id)
-      VALUES (${randomUUID()}, ${tenantId}, ${visitorId}, ${recentSessionId}, 'page_view', ${recentDate}, 'p1')
+      INSERT INTO ${EVENTS_TABLE} (tenant_id, visitor_id, session_id, event_type, timestamp, property_id)
+      VALUES (${tenantId}, ${visitorId}, ${recentSessionId}, 'page_view', ${recentDate}, 'p1')
     `,
     );
 

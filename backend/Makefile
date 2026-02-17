@@ -8,7 +8,7 @@
 #   make db-*           → database lifecycle (start, stop, migrate, seed, studio)
 #   make db-seed-baseline → seed retention/rollup smoke-test baseline data
 #
-# Prerequisites (Homebrew): flyctl, postgresql@17, node (via fnm)
+# Prerequisites (Homebrew): flyctl, postgresql@18, node (via fnm)
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -20,10 +20,10 @@ APP_PORT    := 3000
 PG_DATA     := $(HOME)/.local/share/pg-backend
 PG_LOG      := /tmp/pg-backend.log
 PG_DB       := altcontext_dev
+TEST_DB     := altcontext_test
 PG_USER     := $(USER)
 DATABASE_URL ?= postgresql://$(PG_USER)@localhost:5432/$(PG_DB)
-TEST_SCHEMA := backend_test
-TEST_DATABASE_URL := postgresql://$(PG_USER)@localhost:5432/$(PG_DB)?schema=$(TEST_SCHEMA)
+TEST_DATABASE_URL := postgresql://$(PG_USER)@localhost:5432/$(TEST_DB)
 TEST_IP_HASH_PEPPER := 0123456789abcdef0123456789abcdef
 
 export DATABASE_URL
@@ -69,14 +69,14 @@ check: generate typecheck lint format  ## Run all quality gates
 
 audit: check dead-exports duplicates  ## Full audit: quality gates + dead exports + duplication
 
-test: install db-start db-create ## Run backend tests against isolated schema
+test: install db-start db-create-test ## Run backend tests against isolated database
 	DATABASE_URL="$(TEST_DATABASE_URL)" npm run migrate:reset
 	NODE_ENV=test LOG_LEVEL=silent DATABASE_URL="$(TEST_DATABASE_URL)" IP_HASH_PEPPER="$(TEST_IP_HASH_PEPPER)" npm run test
 
 # ---------------------------------------------------------------------------
 # Database lifecycle (local Postgres)
 # ---------------------------------------------------------------------------
-.PHONY: db-init db-start db-stop db-status db-create db-destroy db-reset db-studio db-seed-baseline
+.PHONY: db-init db-start db-stop db-status db-create db-create-test db-destroy db-reset db-studio db-seed-baseline
 
 db-init:  ## Initialise a local Postgres data directory
 	@if [ ! -d "$(PG_DATA)" ]; then \
@@ -99,6 +99,9 @@ db-status:  ## Show Postgres status
 
 db-create: db-start  ## Create the dev database (idempotent)
 	@createdb $(PG_DB) 2>/dev/null || echo "Database $(PG_DB) already exists"
+
+db-create-test: db-start  ## Create the test database (idempotent)
+	@createdb $(TEST_DB) 2>/dev/null || echo "Database $(TEST_DB) already exists"
 
 db-destroy:  ## Drop the dev database
 	dropdb --if-exists $(PG_DB)

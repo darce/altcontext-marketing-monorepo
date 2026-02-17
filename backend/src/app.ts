@@ -2,7 +2,6 @@ import cors from "@fastify/cors";
 import formbody from "@fastify/formbody";
 import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyInstance } from "fastify";
-import { randomUUID } from "node:crypto";
 import { ZodError } from "zod";
 
 import { env } from "./config/env.js";
@@ -103,7 +102,6 @@ export const createApp = async (): Promise<FastifyInstance> => {
                 tx,
                 sql`
                   INSERT INTO ${INGEST_REJECTIONS_TABLE} (
-                    "id",
                     "tenant_id",
                     "property_id",
                     "endpoint",
@@ -111,7 +109,6 @@ export const createApp = async (): Promise<FastifyInstance> => {
                     "status_code",
                     "occurred_at"
                   ) VALUES (
-                    ${randomUUID()},
                     ${tenantId},
                     ${propertyId},
                     ${ingestEndpoint},

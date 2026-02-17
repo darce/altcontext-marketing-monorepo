@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash } from "node:crypto";
 import type { PoolClient } from "pg";
 
 import { DeviceType, TrafficSource } from "../lib/schema-enums.js";
@@ -234,8 +234,6 @@ export const ingestEvent = async (
     dedupeTimeToken,
   );
 
-  const eventId = randomUUID();
-
   const referrer = normalizeOptional(body.referrer);
   const referrerHost = toReferrerHost(referrer ?? undefined);
   const requestHost = normalizeHost(context.host);
@@ -283,14 +281,14 @@ export const ingestEvent = async (
     tx,
     sql`
       INSERT INTO ${EVENTS_TABLE} (
-        "id", "tenant_id", "visitor_id", "session_id", "dedupe_key",
+        "tenant_id", "visitor_id", "session_id", "dedupe_key",
         "event_type", "path", "timestamp",
         "ip_hash", "ua_hash", "props",
         "property_id", "traffic_source", "device_type",
         "country_code", "is_entrance", "is_exit", "is_conversion"
       )
       VALUES (
-        ${eventId}, ${tenantId}, ${visitor.id}, ${session.id}, ${dedupeKey},
+        ${tenantId}, ${visitor.id}, ${session.id}, ${dedupeKey},
         ${body.eventType}, ${body.path}, ${occurredAt},
         ${context.ipHash}, ${context.uaHash}, ${serializedProps}::jsonb,
         ${propertyId}, ${trafficSource}::${TRAFFIC_SOURCE_TYPE}, ${deviceType}::${DEVICE_TYPE_TYPE},
