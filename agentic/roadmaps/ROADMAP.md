@@ -1,6 +1,6 @@
 # AltContext Marketing Monorepo — Master Roadmap
 
-Last updated: 2026-02-16
+Last updated: 2026-02-17
 
 ## Table of Contents
 
@@ -51,8 +51,8 @@ Each epic contains full design, data model, API contracts, delivery phases, and 
 
 | Epic | File | Status | Summary |
 |------|------|--------|---------|
-| Backend Marketing Server | [epics/backend-marketing-server.md](epics/backend-marketing-server.md) | Phases 0–2B complete; Prisma removed; test coverage in progress | Core API: events, leads, sessions, rollups, metrics, i18n, runtime assertions, auth, multi-property |
-| Multi-Tenancy & RLS | [epics/multi-tenancy-rls.md](epics/multi-tenancy-rls.md) | Not started | Tenant model, API keys, RLS policies, dashboard auth, multi-property + future multi-org |
+| Backend Marketing Server | [epics/backend-marketing-server.md](epics/backend-marketing-server.md) | Phases 0–5 complete | Core API: events, leads, sessions, rollups, metrics, i18n, runtime assertions, auth, multi-property |
+| Multi-Tenancy & RLS | [epics/multi-tenancy-rls.md](epics/multi-tenancy-rls.md) | MT-1 complete | Tenant model, API keys, RLS policies, dashboard auth, multi-property + future multi-org |
 
 ### Dashboard Epics
 
@@ -77,12 +77,18 @@ Phase 0–2: Backend foundations ✅
   │     │
   │     ├─→ Phase 0.3: Remove Prisma runtime ✅
   │     │
-  │     └─→ Phase 4: Deploy to Fly.io (infra provisioned; smoke tests pending)
+  │     └─→ Phase 4: Deploy to Fly.io ✅
   │           │
-  │           ├─→ Phase 5: First property integration (static site → bootstrap tenant)
-  │           │     Wire beacons + email form to backend using bootstrap tenant's ingest API key
+  │           ├─→ Phase 5: First property integration ✅
+  │           │     Beacons + email form wired to backend; telemetry bugs fixed (0.6.1)
   │           │
   │           └─→ Phase 6: Multi-Tenancy & RLS (epics/multi-tenancy-rls.md)
+  │                 │
+  │                 ├─→ MT-1: Tenant model + API keys ✅
+  │                 │     │
+  │                 │     └─→ MT-2: Row-Level Security ← NEXT
+  │                 │           │
+  │                 │           └─→ MT-3 + D-1: Dashboard auth
   │                 │
   │                 ├─→ Dashboard D-1: Skeleton + Auth
   │                 │     │
@@ -116,10 +122,12 @@ Recommended implementation order with estimated effort.
 | 1a | Phase 0.3: Remove Prisma runtime | Backend | — | ✅ Done |
 | 1b | Phase 0.3.1: Post-Prisma audit | Backend | — | ✅ Done |
 | 1c | Phase 0.4: Test coverage (core routes) | Backend | — | ✅ Done |
+| 1d | Phase 0.5: Deploy, harden, test coverage | Backend | — | ✅ Done |
+| 1e | Phase 0.5.1: Post-review findings | Backend | — | ✅ Done |
 | 2 | Phase 4: Deploy to Fly.io | Backend | 1–2 days | ✅ Done |
-| 3 | Phase 5: First property integration | Backend (static client) | 2–3 days | #2 |
-| 4 | Phase 6 / MT-1: Tenant model + API keys | Multi-Tenancy | 2–3 days | #2 |
-| 5 | Phase 6 / MT-2: Row-Level Security | Multi-Tenancy | 1–2 days | #4 |
+| 3 | Phase 5: First property integration | Backend (static client) | 2–3 days | ✅ Done (0.6 + 0.6.1) |
+| 4 | Phase 6 / MT-1: Tenant model + API keys | Multi-Tenancy | 2–3 days | ✅ Done (0.7 + 0.7.1) |
+| 5 | Phase 6 / MT-2: Row-Level Security | Multi-Tenancy | 1–2 days | ✅ Done (0.8 + 0.8.1) |
 | 6 | Phase 6 / MT-3 + D-1: Dashboard auth | Multi-Tenancy + Dashboard | 2–3 days | #5 |
 | 7 | D-2: Metrics Overview | Dashboard | 2–3 days | #6 |
 | 8 | D-3: i18n + WCAG Foundation | Dashboard | 2–3 days | #6 |
@@ -144,6 +152,7 @@ These apply to both **platform** workspaces (backend + dashboard) and **client p
 
 - Backend: `src/lib/assert.ts` `invariant()` → [epics/backend-marketing-server.md §14](epics/backend-marketing-server.md)
 - Dashboard: `$lib/assert.ts` `invariant()` → [epics/dashboard.md §6](epics/dashboard.md)
+- When `invariant()` lands, add tests: `AssertionError` type, Fastify error handler → 500, missing tenant context rejection at service entry points (`ensureVisitorSession`, `applyConsentStatus`, `linkLeadToVisitor`, `rollupDateRange`).
 
 ### Authentication
 
@@ -170,6 +179,8 @@ These apply to both **platform** workspaces (backend + dashboard) and **client p
 |-------|---------|-----------|--------|
 | Unit | `node:test` + `tsx` | Vitest + `@testing-library/svelte` | N/A |
 | Integration | `node:test` + real Postgres | — | — |
+
+> **Backend test suite note:** `leads-unsubscribe.test.ts` partially overlaps `routes.test.ts` — consolidate when either file next changes. `events.test.ts` rate-limit test (200 requests) is slow; tag for `--test-name-pattern` exclusion in fast-feedback loops.
 | e2e (API) | Playwright `request` context | — | — |
 | e2e (browser) | — | Playwright (Chromium/FF/WebKit) | Playwright |
 | WCAG | — | axe-core (Playwright + Storybook) | axe-core (Playwright + Lighthouse) |
@@ -204,8 +215,8 @@ Full proposal: [epics/e2e-testing-harness.md](epics/e2e-testing-harness.md)
 
 ### Multi-Tenancy & RLS
 
-- [ ] Tenant model + API keys (MT-1)
-- [ ] Row-Level Security policies (MT-2)
+- [x] Tenant model + API keys (MT-1)
+- [x] Row-Level Security policies (MT-2) — review findings tracked in 0.8.1
 - [ ] Dashboard auth integration (MT-3)
 - [ ] Tenant-scoped dashboard pages (MT-4)
 - [ ] Tenant onboarding flow (MT-5)
@@ -224,9 +235,9 @@ Full proposal: [epics/e2e-testing-harness.md](epics/e2e-testing-harness.md)
 
 ### Static Site (First Client Property — Bootstrap Tenant)
 
-- [ ] Email capture form wired to backend (JS + no-JS fallback)
-- [ ] Telemetry beacons to backend (page_view, engagement, CWV)
-- [ ] Ingest API key configured for bootstrap tenant property
+- [x] Email capture form wired to backend (JS-only submission)
+- [x] Telemetry beacons to backend (page_view, engagement, CWV)
+- [x] Ingest API key configured for bootstrap tenant property
 - [ ] WCAG AA (contrast, alt text, skip links, focus)
 
 ### e2e Testing & WCAG CI
@@ -239,7 +250,7 @@ Full proposal: [epics/e2e-testing-harness.md](epics/e2e-testing-harness.md)
 
 ### Description Service Integration
 
-Tracked separately: [description-service-orchestrator.md](description-service-orchestrator.md)
+Tracked separately: [description-service-integration.md](epics/description-service-integration.md)
 
 - [ ] Webhook ingestion endpoint
 - [ ] Usage rollups

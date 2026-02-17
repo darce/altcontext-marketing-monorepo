@@ -45,12 +45,13 @@ These constraints are aligned with:
 
 ## 3. Stack
 
-PostgreSQL + Prisma + TypeScript Node API.
+TypeScript + Fastify + PostgreSQL (raw `pg` driver) + Zod.
 
-- Runtime: Node.js 20 + TypeScript
+- Runtime: Node.js 22 + TypeScript
 - API framework: Fastify
-- ORM / migrations: Prisma (dev-only — excluded from production image)
-- Database: PostgreSQL (Fly Postgres, unmanaged cluster)
+- Database driver: `pg` (raw SQL via tagged template `sql` helper)
+- Migrations: Prisma (dev-only — excluded from production image; used for schema management and migration generation only)
+- Database: PostgreSQL (Fly Managed Postgres)
 - Validation: Zod
 - Observability: Pino structured JSON logs (stdout → Fly log drain)
 
@@ -276,8 +277,8 @@ The service operates under Canadian law. Two federal statutes govern data handli
 ### Infrastructure
 
 - One Fly app for backend API (`backend/`).
-- One unmanaged Fly Postgres cluster, same region. The backend team manages backups, upgrades, and monitoring.
-- Single region initially (`yyz` — Toronto, or nearest Canadian region); scale later.
+- One Fly Managed Postgres cluster, same region.
+- Single region initially (`yyz` — Toronto); scale later.
 
 ### Deployment Steps
 
@@ -305,7 +306,7 @@ The service operates under Canadian law. Two federal statutes govern data handli
 ### Reliability
 
 - `GET /v1/healthz` registered as Fly HTTP check.
-- Daily Postgres backup (scheduled `pg_dump` — backend team responsibility for unmanaged cluster).
+- Daily Postgres backup (Fly Managed Postgres handles automated backups).
 - Alerting on error rate, p95 latency, DB storage, failed migrations.
 
 ## 11. Delivery Phases
@@ -352,17 +353,17 @@ Because this is a pre-production project with no legacy production data, Phase 3
 
 Tracked in a dedicated task: `agentic/tasks/backend-tasks/0.2.3.phase-2b-consolidate-web-traffic-log-into-event.md`.
 
-### Phase 4: Deploy to Fly.io (1-2 days)
+### Phase 4: Deploy to Fly.io (1-2 days) — Complete
 
 - Create Dockerfile, `.dockerignore`, `fly.toml` with Canadian region.
-- Provision Fly app + Fly Postgres (unmanaged cluster).
+- Provision Fly app + Fly Postgres (managed cluster).
 - Set secrets, deploy, apply migration via `fly proxy`.
 - Smoke-test health, events, leads, metrics endpoints.
 - Configure CORS for GitHub Pages domain.
 - Set up daily rollup cron.
-- Tracked in `agentic/tasks/backend-tasks/deploy-marketing-backend-to-fly.md`.
+- Tracked in `agentic/tasks/backend-tasks/closed/deploy-marketing-backend-to-fly.md`.
 
-### Phase 5: Frontend Integration (2-3 days)
+### Phase 5: Frontend Integration (2-3 days) — In Progress
 
 - Add email capture form to `index.html` (works with and without JS).
 - Add telemetry module: `anon_id`, `sendBeacon`, page_view, engagement, CWV beacons.
@@ -396,14 +397,14 @@ Tracked in a dedicated task: `agentic/tasks/backend-tasks/0.2.3.phase-2b-consoli
 
 ### Remaining (Phase 2B–5)
 
-- [ ] `WebTrafficLog` columns promoted to `Event`; WTL table removed from canonical greenfield init schema (Phase 3).
-- [ ] Rollup queries rewritten to read from `events` instead of `web_traffic_logs` (Phase 3).
-- [ ] Server-side geo enrichment (MaxMind GeoLite2 → `country_code`) operational (Phase 3).
-- [ ] Backend deployed to Fly.io and reachable (Phase 4).
-- [ ] Static site email form works with JS and no-JS fallback (Phase 5).
-- [ ] Static site beacons (page_view, engagement, CWV) firing and stored (Phase 5).
-- [ ] PIPEDA retention/deletion workflows end-to-end verified in production (Phase 4).
-- [ ] Backup + restore test completed (Phase 4).
+- [x] `WebTrafficLog` columns promoted to `Event`; WTL table removed from canonical greenfield init schema (Phase 2B).
+- [x] Rollup queries rewritten to read from `events` instead of `web_traffic_logs` (Phase 2B).
+- [ ] Server-side geo enrichment (MaxMind GeoLite2 → `country_code`) operational (deferred).
+- [x] Backend deployed to Fly.io and reachable (Phase 4).
+- [ ] Static site email form works with JS and no-JS fallback (Phase 5 — in progress).
+- [ ] Static site beacons (page_view, engagement, CWV) firing and stored (Phase 5 — in progress).
+- [x] PIPEDA retention/deletion workflows end-to-end verified in production (Phase 4).
+- [ ] Backup + restore test completed (deferred).
 - [ ] RLS policies enforce tenant isolation on all data tables (Phase 6).
 - [ ] Per-tenant API key auth replaces single `ADMIN_API_KEY` (Phase 6).
 - [ ] Dashboard login + session auth operational (Phase 6).
@@ -511,7 +512,7 @@ A future requirement is to support **organisations** as a layer above tenants �
 ## References
 
 - Fly JavaScript basics: https://fly.io/docs/js/the-basics/
-- Fly Postgres (unmanaged clusters): https://fly.io/docs/flyctl/postgres/
+- Fly Postgres (managed): https://fly.io/docs/flyctl/postgres/
 - Fly secrets management: https://fly.io/docs/apps/secrets/
 - Prisma on Fly (Postgres): https://fly.io/docs/js/prisma/postgres/
 - PIPEDA overview: https://www.priv.gc.ca/en/privacy-topics/privacy-laws-in-canada/the-personal-information-protection-and-electronic-documents-act-pipeda/
