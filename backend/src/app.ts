@@ -1,6 +1,8 @@
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import formbody from "@fastify/formbody";
 import rateLimit from "@fastify/rate-limit";
+import secureSession from "@fastify/secure-session";
 import Fastify, { type FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 
@@ -13,10 +15,12 @@ import {
 import { tableRef } from "./lib/sql.js";
 import { mountDashboard } from "./lib/dashboard.js";
 import { tenantResolutionHook } from "./lib/tenant-resolution.js";
+import { buildSecureSessionOptions } from "./lib/session-config.js";
 import { eventRoutes } from "./routes/events.js";
 import { healthRoutes } from "./routes/health.js";
 import { leadRoutes } from "./routes/leads.js";
 import { metricsRoutes } from "./routes/metrics.js";
+import { authRoutes } from "./routes/auth.js";
 
 const INGEST_REJECTIONS_TABLE = tableRef("ingest_rejections");
 
@@ -63,6 +67,7 @@ export const createApp = async (): Promise<FastifyInstance> => {
           "req.headers.authorization",
           "req.headers.cookie",
           "req.body.email",
+          "req.body.password",
           "req.body.payload",
           "res.body.email",
         ],
@@ -83,6 +88,8 @@ export const createApp = async (): Promise<FastifyInstance> => {
     },
   });
   await app.register(formbody);
+  await app.register(cookie);
+  await app.register(secureSession, buildSecureSessionOptions(env));
   await app.register(rateLimit, {
     max: env.RATE_LIMIT_MAX,
     timeWindow: env.RATE_LIMIT_TIME_WINDOW,
@@ -161,6 +168,7 @@ export const createApp = async (): Promise<FastifyInstance> => {
   });
 
   await app.register(healthRoutes);
+  await app.register(authRoutes);
 
   // Authenticated/Tenant-scoped API routes
   await app.register(async (api) => {

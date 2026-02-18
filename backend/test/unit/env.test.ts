@@ -6,6 +6,8 @@ import { parseEnvironment } from "../../src/config/env.js";
 const baseEnv: NodeJS.ProcessEnv = {
   DATABASE_URL: "postgresql://example@localhost:5432/example",
   IP_HASH_PEPPER: "0123456789abcdef0123456789abcdef",
+  SESSION_SECRET:
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 };
 
 test("parseEnvironment applies defaults for optional values", () => {
@@ -22,6 +24,8 @@ test("parseEnvironment applies defaults for optional values", () => {
   assert.equal(parsed.ENABLE_HEURISTIC_LINKING, true);
   assert.deepEqual(parsed.CORS_ALLOWED_ORIGINS, []);
   assert.equal(parsed.ADMIN_API_KEY, undefined);
+  assert.equal(parsed.BOOTSTRAP_USER_EMAIL, undefined);
+  assert.equal(parsed.BOOTSTRAP_USER_PASSWORD, undefined);
   assert.equal(parsed.ROLLUP_BATCH_DAYS, 7);
   assert.equal(parsed.ROLLUP_DEFAULT_PROPERTY_ID, "default");
   assert.equal(parsed.METRICS_SUMMARY_CACHE_TTL_MS, 15000);
@@ -64,6 +68,15 @@ test("parseEnvironment parses comma-separated CORS origins", () => {
   ]);
 });
 
+test("parseEnvironment accepts bootstrap password and defers length validation", () => {
+  const parsed = parseEnvironment({
+    ...baseEnv,
+    BOOTSTRAP_USER_PASSWORD: "short",
+  });
+
+  assert.equal(parsed.BOOTSTRAP_USER_PASSWORD, "short");
+});
+
 test("parseEnvironment rejects invalid values", () => {
   assert.throws(() =>
     parseEnvironment({
@@ -104,6 +117,13 @@ test("parseEnvironment rejects invalid values", () => {
     parseEnvironment({
       ...baseEnv,
       METRICS_SUMMARY_CACHE_TTL_MS: "-1",
+    }),
+  );
+
+  assert.throws(() =>
+    parseEnvironment({
+      ...baseEnv,
+      SESSION_SECRET: "short",
     }),
   );
 });

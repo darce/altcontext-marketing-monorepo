@@ -1,6 +1,7 @@
 import { pool } from "./lib/db.js";
 import { createApp } from "./app.js";
 import { env } from "./config/env.js";
+import { ensureBootstrapUser } from "./services/auth.js";
 
 const startServer = async (): Promise<void> => {
   const app = await createApp();
@@ -27,6 +28,14 @@ const startServer = async (): Promise<void> => {
     client.release();
   } catch (error) {
     app.log.error({ err: error }, "database connection failed");
+    process.exitCode = 1;
+    return;
+  }
+
+  try {
+    await ensureBootstrapUser(app.log);
+  } catch (error) {
+    app.log.error({ err: error }, "bootstrap user initialization failed");
     process.exitCode = 1;
     return;
   }

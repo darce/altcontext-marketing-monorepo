@@ -17,7 +17,8 @@ export const metricsRoutes: FastifyPluginAsync = async (app) => {
       },
     },
     async (request, reply) => {
-      if (!assertAdminRequest(request, reply)) {
+      const authorizedBySession = request.apiKeyScope === "session";
+      if (!authorizedBySession && !assertAdminRequest(request, reply)) {
         return;
       }
 

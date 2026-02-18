@@ -10,6 +10,7 @@ const hashKey = (key: string): string =>
   createHash("sha256").update(key).digest("hex");
 
 export const resetDatabase = async (): Promise<void> => {
+  await prisma.authSession.deleteMany();
   await prisma.dailyIngestRollup.deleteMany();
   await prisma.dailyMetricRollup.deleteMany();
   await prisma.ingestRejection.deleteMany();

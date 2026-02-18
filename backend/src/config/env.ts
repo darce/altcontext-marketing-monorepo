@@ -33,6 +33,11 @@ const environmentSchema = z.object({
     .transform(boolFromString),
   CORS_ALLOWED_ORIGINS: z.string().default("").transform(csvToList),
   ADMIN_API_KEY: z.string().min(24).optional(),
+  SESSION_SECRET: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i, "SESSION_SECRET must be 32-byte hex"),
+  BOOTSTRAP_USER_EMAIL: z.string().email().optional(),
+  BOOTSTRAP_USER_PASSWORD: z.string().optional(),
   ROLLUP_BATCH_DAYS: z.coerce.number().int().min(1).max(365).default(7),
   ROLLUP_DEFAULT_PROPERTY_ID: z
     .string()

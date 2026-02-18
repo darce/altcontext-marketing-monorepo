@@ -47,7 +47,7 @@ enum DeviceType {
 }
 
 model Tenant {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
   name      String
   slug      String   @unique
   plan      String   @default("free")
@@ -66,12 +66,13 @@ model Tenant {
   dailyIngestRollups DailyIngestRollup[]
   apiKeys            ApiKey[]
   users              User[]
+  authSessions       AuthSession[]
 
   @@map("tenants")
 }
 
 model ApiKey {
-  id        String    @id @default(uuid()) @db.Uuid
+  id        String    @id @default(dbgenerated("uuidv7()")) @db.Uuid
   tenantId  String    @map("tenant_id") @db.Uuid
   keyHash   String    @unique @map("key_hash") @db.VarChar(64)
   keyPrefix String    @map("key_prefix") @db.VarChar(16)
@@ -88,22 +89,39 @@ model ApiKey {
 }
 
 model User {
-  id        String   @id @default(uuid()) @db.Uuid
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
   tenantId  String   @map("tenant_id") @db.Uuid
   email     String
   name      String?
   role      String   @default("member")
+  passwordHash String? @map("password_hash") @db.VarChar(255)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant       Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  authSessions AuthSession[]
 
   @@unique([tenantId, email])
   @@map("users")
 }
 
+model AuthSession {
+  id        String   @id @default(dbgenerated("uuidv7()")) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId], map: "auth_sessions_tenant_id_user_id_idx")
+  @@index([tenantId, expiresAt], map: "auth_sessions_tenant_id_expires_at_idx")
+  @@map("auth_sessions")
+}
+
 model Visitor {
-  id          String   @id @default(uuid())
+  id          String   @id @default(dbgenerated("(uuidv7())::text"))
   tenantId    String   @map("tenant_id") @db.Uuid
   anonId      String   @map("anon_id")
   firstSeenAt DateTime @default(now()) @map("first_seen_at")
@@ -127,7 +145,7 @@ model Visitor {
 }
 
 model Session {
-  id          String    @id @default(uuid())
+  id          String    @id @default(dbgenerated("(uuidv7())::text"))
   tenantId    String    @map("tenant_id") @db.Uuid
   visitorId   String    @map("visitor_id")
   startedAt   DateTime  @default(now()) @map("started_at")
@@ -154,7 +172,7 @@ model Session {
 }
 
 model Event {
-  id            String        @id @default(uuid())
+  id            String        @id @default(dbgenerated("(uuidv7())::text"))
   tenantId      String        @map("tenant_id") @db.Uuid
   visitorId     String        @map("visitor_id")
   sessionId     String?       @map("session_id")
@@ -189,11 +207,11 @@ model Event {
 }
 
 model Lead {
-  id              String        @id @default(uuid())
+  id              String        @id @default(dbgenerated("(uuidv7())::text"))
   tenantId        String        @map("tenant_id") @db.Uuid
   emailNormalized String        @map("email_normalized") @db.VarChar(320)
   // Generated in DB: split_part(email_normalized, '@', 2)
-  emailDomain     String?       @map("email_domain") @db.VarChar(255) @ignore
+  emailDomain     String?       @map("email_domain") @default(dbgenerated("split_part((email_normalized)::text, '@'::text, 2)")) @db.VarChar(255) @ignore
   consentStatus   ConsentStatus @default(pending) @map("consent_status")
   firstCapturedAt DateTime      @default(now()) @map("first_captured_at")
   lastCapturedAt  DateTime      @default(now()) @map("last_captured_at")
@@ -212,7 +230,7 @@ model Lead {
 }
 
 model LeadIdentity {
-  id         String     @id @default(uuid())
+  id         String     @id @default(dbgenerated("(uuidv7())::text"))
   tenantId   String     @map("tenant_id") @db.Uuid
   leadId     String     @map("lead_id")
   visitorId  String     @map("visitor_id")
@@ -232,7 +250,7 @@ model LeadIdentity {
 }
 
 model FormSubmission {
-  id               String           @id @default(uuid())
+  id               String           @id @default(dbgenerated("(uuidv7())::text"))
   tenantId         String           @map("tenant_id") @db.Uuid
   leadId           String?          @map("lead_id")
   visitorId        String?          @map("visitor_id")
@@ -255,7 +273,7 @@ model FormSubmission {
 }
 
 model ConsentEvent {
-  id        String        @id @default(uuid())
+  id        String        @id @default(dbgenerated("(uuidv7())::text"))
   tenantId  String        @map("tenant_id") @db.Uuid
   leadId    String        @map("lead_id")
   status    ConsentStatus
@@ -272,7 +290,7 @@ model ConsentEvent {
 }
 
 model IngestRejection {
-  id         String   @id @default(uuid())
+  id         String   @id @default(dbgenerated("(uuidv7())::text"))
   tenantId   String   @map("tenant_id") @db.Uuid
   propertyId String   @map("property_id") @db.VarChar(128)
   endpoint   String   @db.VarChar(64)
@@ -289,7 +307,7 @@ model IngestRejection {
 }
 
 model DailyMetricRollup {
-  id                      String   @id @default(uuid())
+  id                      String   @id @default(dbgenerated("(uuidv7())::text"))
   tenantId                String   @map("tenant_id") @db.Uuid
   propertyId              String   @map("property_id") @db.VarChar(128)
   day                     DateTime @db.Date
@@ -318,7 +336,7 @@ model DailyMetricRollup {
 }
 
 model DailyIngestRollup {
-  id             String   @id @default(uuid())
+  id             String   @id @default(dbgenerated("(uuidv7())::text"))
   tenantId       String   @map("tenant_id") @db.Uuid
   propertyId     String   @map("property_id") @db.VarChar(128)
   day            DateTime @db.Date
