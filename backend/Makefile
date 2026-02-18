@@ -22,6 +22,14 @@ PG_LOG      := /tmp/pg-backend.log
 PG_DB       := altcontext_dev
 TEST_DB     := altcontext_test
 PG_USER     := $(USER)
+REPO_ROOT   := ..
+FLY_APP     := marketing-altcontext
+FLY_CONFIG  := fly.toml
+FLY_DB_APP  := marketing-altcontext-db
+FLY_DB_NAME := marketing_altcontext
+BOOTSTRAP_PASSWORD_MIN_LENGTH := 12
+BOOTSTRAP_PASSWORD_POLICY := min$(BOOTSTRAP_PASSWORD_MIN_LENGTH)-v1
+FLY_REQUIRED_SECRETS := DATABASE_URL IP_HASH_PEPPER SESSION_SECRET BOOTSTRAP_TENANT_ID BOOTSTRAP_USER_EMAIL BOOTSTRAP_USER_PASSWORD BOOTSTRAP_USER_PASSWORD_POLICY
 DATABASE_URL ?= postgresql://$(PG_USER)@localhost:5432/$(PG_DB)
 TEST_DATABASE_URL := postgresql://$(PG_USER)@localhost:5432/$(TEST_DB)
 TEST_IP_HASH_PEPPER := 0123456789abcdef0123456789abcdef
@@ -155,7 +163,7 @@ rollups-mv-refresh: install db-start  ## Refresh metrics materialized view
 # ---------------------------------------------------------------------------
 # Server
 # ---------------------------------------------------------------------------
-.PHONY: start dev stop
+.PHONY: start dev stop deploy
 
 start: install  ## Start the server (production-like)
 	npm run start
@@ -166,24 +174,151 @@ dev: install db-start db-create  ## Start local dev: Postgres + server with watc
 
 stop: db-stop  ## Stop local Postgres (server stopped via Ctrl-C)
 
+deploy: fly-deploy  ## Alias for Fly deploy workflow (quality gates + deploy + health checks)
+
 # ---------------------------------------------------------------------------
 # Fly.io deployment
 # ---------------------------------------------------------------------------
 # fly.toml lives at monorepo root — run `fly deploy` from there, or `make fly-deploy` from backend/.
 
-.PHONY: fly-launch fly-deploy fly-deploy-only fly-secrets fly-logs fly-ssh fly-status fly-checks fly-pg-attach
+.PHONY: fly-launch fly-migrations-check fly-secrets-check fly-auth-secrets fly-auth-password-reset fly-auth-password-unset fly-deploy fly-deploy-only fly-secrets fly-logs fly-ssh fly-status fly-checks fly-start-stopped fly-pg-attach
 
 fly-launch:  ## First-time Fly app scaffold
-	fly launch
+	fly launch -a $(FLY_APP)
 
-fly-deploy: check  ## Full deploy: quality gates → build → push → verify
-	cd .. && fly deploy
+fly-migrations-check:  ## Block deploy when Fly DB is behind local migration set
+	@echo "== Checking Fly migration status for $(FLY_APP) =="
+	@local_count="$$(find prisma/migrations -mindepth 1 -maxdepth 1 -type d | wc -l | tr -d ' ')"; \
+		remote_count="$$(fly postgres connect -a $(FLY_DB_APP) -d $(FLY_DB_NAME) -c 'SELECT COUNT(*) FROM \"_prisma_migrations\" WHERE finished_at IS NOT NULL;' 2>/dev/null | awk '/^[[:space:]]*[0-9]+[[:space:]]*$$/{print $$1; exit}')"; \
+		if [ -z "$$remote_count" ]; then \
+			echo "Unable to determine remote migration count for $(FLY_DB_APP)."; \
+			echo "Apply migrations manually before deploy (fly proxy + prisma migrate deploy)."; \
+			exit 1; \
+		fi; \
+		if [ "$$remote_count" -lt "$$local_count" ]; then \
+			echo "Remote DB has $$remote_count applied migrations but local has $$local_count."; \
+			echo "Run prisma migrate deploy against $(FLY_DB_APP) before deploying app code."; \
+			exit 1; \
+		fi; \
+		echo "Migration preflight passed (remote=$$remote_count, local=$$local_count)."
+
+fly-secrets-check:  ## Verify required Fly secrets are present before deploy
+	@echo "== Checking required Fly secrets for $(FLY_APP) =="
+	@secret_names="$$(fly secrets list -a $(FLY_APP) | awk 'NR>1 {print $$1}')"; \
+		missing=0; \
+		for key in $(FLY_REQUIRED_SECRETS); do \
+			if ! printf '%s\n' "$$secret_names" | grep -qx "$$key"; then \
+				echo "Missing Fly secret: $$key"; \
+				missing=1; \
+			fi; \
+		done; \
+		if [ "$$missing" -ne 0 ]; then \
+			echo "Set missing secrets before deploy."; \
+			echo "Use make fly-auth-secrets BOOTSTRAP_TENANT_ID=<uuid> BOOTSTRAP_USER_EMAIL=<email>"; \
+			exit 1; \
+		fi; \
+		started_machine_count="$$(fly machine list -a $(FLY_APP) 2>/dev/null | awk 'NF > 2 && $$1 ~ /^[0-9a-f]/ && $$3 == "started" {count++} END {print count+0}')"; \
+		if [ "$$started_machine_count" -gt 0 ]; then \
+			echo "== Validating BOOTSTRAP_USER_PASSWORD policy on started machine =="; \
+			attempt=1; \
+			max_attempts=5; \
+			verified=0; \
+			while [ "$$attempt" -le "$$max_attempts" ]; do \
+				check_output="$$(fly ssh console -a $(FLY_APP) -C "node -e 'const min=$(BOOTSTRAP_PASSWORD_MIN_LENGTH); const password=process.env.BOOTSTRAP_USER_PASSWORD ?? \"\"; if (password.length === 0) { console.error(\"BOOTSTRAP_USER_PASSWORD is empty\"); process.exit(11); } if (password.length < min) { console.error(\"BOOTSTRAP_USER_PASSWORD must be at least \" + min + \" characters\"); process.exit(12); }'" 2>&1)"; \
+				check_status="$$?"; \
+				if [ "$$check_status" -eq 0 ]; then \
+					verified=1; \
+					echo "Runtime password policy check passed."; \
+					break; \
+				fi; \
+				if printf '%s\n' "$$check_output" | grep -Eq 'BOOTSTRAP_USER_PASSWORD is empty|must be at least'; then \
+					echo "$$check_output"; \
+					echo "Invalid BOOTSTRAP_USER_PASSWORD in Fly runtime env."; \
+					echo "Run make fly-auth-password-reset (or make fly-auth-secrets) and redeploy."; \
+					exit 1; \
+				fi; \
+				if printf '%s\n' "$$check_output" | grep -Eiq 'connection was refused|machine still attempting to start|could not find a good candidate|i/o timeout|deadline exceeded|connection reset'; then \
+					echo "Fly SSH is not ready yet (attempt $$attempt/$$max_attempts); retrying in 3s..."; \
+					attempt=$$((attempt + 1)); \
+					sleep 3; \
+					continue; \
+				fi; \
+				echo "$$check_output"; \
+				echo "Unable to validate BOOTSTRAP_USER_PASSWORD via Fly SSH."; \
+				exit 1; \
+			done; \
+			if [ "$$verified" -ne 1 ]; then \
+				echo "Unable to validate BOOTSTRAP_USER_PASSWORD via Fly SSH after $$max_attempts attempts."; \
+				echo "Ensure at least one machine is healthy, then rerun make fly-secrets-check."; \
+				exit 1; \
+			fi; \
+		else \
+			echo "No started machine available for runtime password-length verification; required-secret + policy-marker checks passed."; \
+		fi
+
+fly-auth-secrets:  ## Set dashboard auth secrets (password prompted if BOOTSTRAP_USER_PASSWORD is unset)
+	@if [ -z "$(BOOTSTRAP_TENANT_ID)" ] || [ -z "$(BOOTSTRAP_USER_EMAIL)" ]; then \
+		echo "Usage: make fly-auth-secrets BOOTSTRAP_TENANT_ID=<uuid> BOOTSTRAP_USER_EMAIL=<email> [BOOTSTRAP_USER_PASSWORD=<password>] [SESSION_SECRET=<64hex>]"; \
+		exit 1; \
+	fi
+	@password="$(BOOTSTRAP_USER_PASSWORD)"; \
+		if [ -z "$$password" ]; then \
+			read -r -s -p "Bootstrap password: " password; \
+			echo; \
+		fi; \
+		if [ -z "$$password" ]; then \
+			echo "Bootstrap password is required."; \
+			exit 1; \
+		fi; \
+		if [ "$$(printf '%s' "$$password" | wc -c | tr -d ' ')" -lt "$(BOOTSTRAP_PASSWORD_MIN_LENGTH)" ]; then \
+			echo "Bootstrap password must be at least $(BOOTSTRAP_PASSWORD_MIN_LENGTH) characters."; \
+			exit 1; \
+		fi; \
+		session_secret="$(SESSION_SECRET)"; \
+		if [ -z "$$session_secret" ]; then \
+			session_secret="$$(openssl rand -hex 32)"; \
+		fi; \
+		fly secrets set -a $(FLY_APP) \
+			SESSION_SECRET="$$session_secret" \
+			BOOTSTRAP_TENANT_ID="$(BOOTSTRAP_TENANT_ID)" \
+			BOOTSTRAP_USER_EMAIL="$(BOOTSTRAP_USER_EMAIL)" \
+			BOOTSTRAP_USER_PASSWORD="$$password" \
+			BOOTSTRAP_USER_PASSWORD_POLICY="$(BOOTSTRAP_PASSWORD_POLICY)"
+
+fly-auth-password-reset:  ## Rotate only BOOTSTRAP_USER_PASSWORD (prompted if unset)
+	@password="$(BOOTSTRAP_USER_PASSWORD)"; \
+		if [ -z "$$password" ]; then \
+			read -r -s -p "New bootstrap password: " password; \
+			echo; \
+		fi; \
+		if [ -z "$$password" ]; then \
+			echo "Bootstrap password is required."; \
+			exit 1; \
+		fi; \
+		if [ "$$(printf '%s' "$$password" | wc -c | tr -d ' ')" -lt "$(BOOTSTRAP_PASSWORD_MIN_LENGTH)" ]; then \
+			echo "Bootstrap password must be at least $(BOOTSTRAP_PASSWORD_MIN_LENGTH) characters."; \
+			exit 1; \
+		fi; \
+		fly secrets set -a $(FLY_APP) \
+			BOOTSTRAP_USER_PASSWORD="$$password" \
+			BOOTSTRAP_USER_PASSWORD_POLICY="$(BOOTSTRAP_PASSWORD_POLICY)"
+
+fly-auth-password-unset:  ## Remove bootstrap password secrets (forces reconfiguration before deploy)
+	@read -r -p "Unset BOOTSTRAP_USER_PASSWORD for $(FLY_APP)? [y/N] " confirm; \
+		if [ "$$confirm" != "y" ] && [ "$$confirm" != "Y" ]; then \
+			echo "Aborted."; \
+			exit 1; \
+		fi; \
+		fly secrets unset -a $(FLY_APP) BOOTSTRAP_USER_PASSWORD BOOTSTRAP_USER_PASSWORD_POLICY
+
+fly-deploy: fly-migrations-check fly-secrets-check check  ## Full deploy: preflight secrets + migrations → quality gates → build → push → verify
+	cd $(REPO_ROOT) && fly deploy --config $(FLY_CONFIG) -a $(FLY_APP)
 	@echo "== Waiting for health check =="
 	@sleep 5
-	fly checks list
+	fly checks list -a $(FLY_APP)
 
-fly-deploy-only:  ## Deploy without running quality gates first
-	cd .. && fly deploy
+fly-deploy-only: fly-migrations-check fly-secrets-check  ## Deploy without running quality gates first
+	cd $(REPO_ROOT) && fly deploy --config $(FLY_CONFIG) -a $(FLY_APP)
 
 fly-secrets:  ## Import .env.production into Fly secrets (staged, no restart)
 	@if [ ! -f .env.production ]; then \
@@ -193,16 +328,27 @@ fly-secrets:  ## Import .env.production into Fly secrets (staged, no restart)
 	@echo "Secrets staged. Run 'fly deploy' to apply."
 
 fly-logs:  ## Tail live production logs
-	fly logs
+	fly logs -a $(FLY_APP)
 
 fly-ssh:  ## SSH into the running Fly machine
-	fly ssh console
+	fly ssh console -a $(FLY_APP)
 
 fly-status:  ## Show Fly app status
-	fly status
+	fly status -a $(FLY_APP)
 
 fly-checks:  ## Show Fly health check state
-	fly checks list
+	fly checks list -a $(FLY_APP)
+
+fly-start-stopped:  ## Start all stopped Fly machines for this app
+	@stopped_ids="$$(fly machine list -a $(FLY_APP) | awk 'NF > 2 && $$1 ~ /^[0-9a-f]/ && $$3 == "stopped" { print $$1 }')"; \
+		if [ -z "$$stopped_ids" ]; then \
+			echo "No stopped Fly machines for $(FLY_APP)."; \
+			exit 0; \
+		fi; \
+		for id in $$stopped_ids; do \
+			echo "Starting machine $$id"; \
+			fly machine start $$id -a $(FLY_APP); \
+		done
 
 fly-pg-attach:  ## Attach a Fly Postgres cluster (sets DATABASE_URL)
 	@read -p "Postgres app name: " pg_app && \

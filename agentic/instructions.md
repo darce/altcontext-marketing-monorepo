@@ -49,6 +49,7 @@ Goal: load only the minimum instruction files required for the current task to r
 | [`language-standards.md`](./instructions/language-standards.md) | TypeScript standards (shared) |
 
 Backend workflow note: use `make -C backend db-seed-baseline` to run the standalone baseline seed helper (`backend/test/helpers/seed-baseline.ts`) for retention/rollup smoke-test data.
+Prisma workflow note: `backend/prisma.config.ts` loads `backend/.env`, so Prisma npm scripts/Make targets resolve `DATABASE_URL` locally without manual shell exports.
 
 ### Cross-domain tasks
 

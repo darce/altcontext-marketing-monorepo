@@ -39,6 +39,7 @@ npm --prefix backend run typecheck        # tsc --noEmit
 npm --prefix backend run lint             # eslint
 npm --prefix backend run migrate          # npx prisma migrate dev
 npm --prefix backend run migrate:deploy   # npx prisma migrate deploy (production)
+npm --prefix backend run migrate:reset    # npx prisma migrate reset --force (local only)
 npm --prefix backend run db:studio        # npx prisma studio
 ```
 
@@ -95,10 +96,14 @@ The backend deploys to Fly.io. Full flyctl patterns, anti-patterns, and command 
 
 ```sh
 make -C backend fly-launch        # first-time scaffold
+make -C backend deploy            # alias of fly-deploy
+make -C backend fly-auth-secrets  # set SESSION_SECRET + BOOTSTRAP_* auth secrets
+make -C backend fly-secrets-check # verify required Fly secrets before deploy
 make -C backend fly-deploy        # quality gates → deploy → verify
 make -C backend fly-deploy-only   # deploy without gates
 make -C backend fly-secrets       # import .env.production (staged)
 make -C backend fly-logs          # tail production logs
+make -C backend fly-start-stopped # start stopped Fly machines
 make -C backend fly-ssh           # shell into machine
 make -C backend fly-pg-attach     # wire DATABASE_URL from Fly Postgres
 ```
@@ -132,6 +137,11 @@ The cluster runs in the same Fly private network as the backend app — no SSL r
 ### Migrations
 
 Prisma is a **dev-only** tool used for schema management (`prisma migrate dev`) on developer machines. It is excluded from the production image via `npm ci --omit=dev`.
+
+- `backend/prisma.config.ts` must load `backend/.env` before calling `env("DATABASE_URL")`, so Prisma CLI commands work from npm scripts and Make targets without requiring manual shell exports.
+- `DATABASE_URL` should include an explicit database role/user (`postgresql://<role>@host:port/db`) for local/dev workflows.
+- Use explicit `DATABASE_URL=...` only when intentionally targeting a non-default database (for example Fly Postgres over `fly proxy`).
+- For recurring dashboard access, keep `BOOTSTRAP_TENANT_ID`, `BOOTSTRAP_USER_EMAIL`, and `BOOTSTRAP_USER_PASSWORD` in deploy secrets; bootstrap startup should be idempotent and allowed to synchronize password hash to the configured secret.
 
 - Prisma must **never** be added to production dependencies or the production Docker image.
 - Migrations CANNOT be run from the deployed container.

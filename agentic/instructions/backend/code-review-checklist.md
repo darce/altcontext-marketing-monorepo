@@ -7,7 +7,9 @@ Pre-review protocol and defect patterns to guard against during any backend code
 ## Pre-Review: Run Deterministic Gates First
 
 > [!IMPORTANT]
-> Before spending review time on style, types, or formatting, run the automated quality gates. These catch violations deterministically — do not waste inference or reviewer attention on anything the toolchain already covers.
+> Before spending review time on style, types, or formatting, rely on automated quality gates. These catch violations deterministically — do not waste inference or reviewer attention on anything the toolchain already covers.
+
+If the task context already provides explicit, current evidence that tests/gates passed for the exact branch under review, treat that as a precondition and proceed with manual review. Re-run gates only when evidence is missing, stale, or your edits changed behavior.
 
 ```sh
 make -C backend audit          # typecheck + lint + format + dead-exports + duplicates
@@ -274,14 +276,59 @@ Test workflows often run destructive operations (`migrate reset`, truncation, dr
 
 **Action:** Explicitly `REVOKE` execute from `PUBLIC` and grant only required roles. Pin definer function `search_path` to trusted schemas (typically `pg_catalog` + explicit targets) and use identifier-safe formatting (`format('%I', ...)`) for dynamic SQL object names.
 
+### 22. Non-Canonical Squashed Init Migrations
+
+When migrations are consolidated for a greenfield baseline, the new `init` can accidentally preserve transitional DDL/DML from historical rollout steps instead of expressing the final schema directly.
+
+**What to look for:**
+- A squashed `init` migration containing backfill-style data updates (for example, `UPDATE ... SET tenant_id = ...`) on tables it just created
+- `ALTER TABLE ... ADD COLUMN ...` followed by immediate `UPDATE` and `SET NOT NULL` for columns that should be created in final form
+- Index drop/recreate sequences that only exist to transition from an older schema state
+
+**Action:** In a greenfield/squashed baseline, require canonical final-state DDL only: create tables, constraints, indexes, policies, roles, and functions exactly as they should exist after all historical changes. Eliminate transitional backfill steps from the squashed `init`.
+
+### 23. Fresh-Database Migration Replay Gaps
+
+Reviews often validate on a pre-migrated local database, which can hide ordering issues and missing prerequisites that only appear on a clean database.
+
+**What to look for:**
+- Review sign-off without replaying migrations from an empty database
+- Validation evidence limited to `migrate status` on an already-initialized DB
+- No proof that a brand-new database reaches the expected end state
+
+**Action:** Make fresh-database replay a sign-off gate for schema-changing work. Reset/create an empty DB, apply all migrations, then verify the schema is up to date and expected bootstrap objects exist.
+
+### 24. Startup-Critical Database Prerequisites Not Verified
+
+Application startup may depend on roles, functions, or permissions that are not guaranteed unless migrations explicitly create and verify them.
+
+**What to look for:**
+- Startup code executing DB-critical statements (`SET ROLE`, security-context setters, required function calls) without corresponding migration verification
+- Tests that assert business behavior but never assert startup prerequisites
+- Missing checks for required DB roles/functions after migration replay
+
+**Action:** Add explicit verification for startup-critical prerequisites in review or CI (roles, functions, grants, policies). Treat missing startup prerequisites as a deployment blocker even if unit/integration tests pass.
+
+### 25. Migration Validation Path Mismatch (`reset/dev` vs `deploy`)
+
+Schema changes can pass local `migrate reset` / `migrate dev` flows but still fail in the actual deployment path (`migrate deploy`) due to engine, permission, or environment differences.
+
+**What to look for:**
+- Evidence only from development migration commands, with no `migrate deploy` validation
+- Different database major version between validation environment and deployment target without explicit compatibility proof
+- CI/local verification that does not exercise the same migration command used for releases
+
+**Action:** For release-bound schema changes, validate at least one clean run using the same deploy command path and target major-version family as production. Do not approve based solely on local dev reset results.
+
 ---
 
 ## Review Protocol
 
-1. **Run gates**: `make -C backend audit` must pass before manual review begins.
+1. **Confirm gate evidence**: Use explicit pass evidence for `make -C backend audit` if already provided for the current branch; otherwise run it before manual review.
 2. **Scan this checklist**: Walk the Prisma boundary guards and each defect pattern against every changed file.
 3. **Check `verification.md` manual rules**: Walk the rules not yet enforced by tooling (percentile correctness, metric columns, field naming, blind casts, schema duplication, write-result reuse).
-4. **Document findings**: Use the task template format (Bug/Antipattern/Gap with file, line, action).
-5. **Update task checklists**: Open every task file in `agentic/tasks/backend-tasks/` that covers the work under review. Mark completed items `- [x]`. Add `> ✅ **CLOSED**` header if all items are done. **This step is mandatory and blocks sign-off.**
-6. **Re-run gates**: `make -C backend audit && make -C backend test` after all fixes.
-7. **Sign-off**: All findings resolved, all gates green, all task checklists current.
+4. **Replay migrations on a fresh DB**: For any schema change, verify a clean-database migration replay succeeds and produces the expected bootstrap objects (roles/functions/policies/indexes).
+5. **Document findings**: Use the task template format (Bug/Antipattern/Gap with file, line, action).
+6. **Update task checklists**: Open every task file in `agentic/tasks/backend-tasks/` that covers the work under review. Mark completed items `- [x]`. Add `> ✅ **CLOSED**` header if all items are done. **This step is mandatory and blocks sign-off.**
+7. **Confirm post-fix gate evidence**: Re-run `make -C backend audit && make -C backend test` after fixes unless fresh pass evidence for the same branch/commit is already documented.
+8. **Sign-off**: All findings resolved, all gates green, migrations replayed cleanly, startup prerequisites verified, all task checklists current.
