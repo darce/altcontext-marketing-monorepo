@@ -5,8 +5,13 @@ import { env } from "$env/dynamic/private";
  * SvelteKit server-side `fetch` calls go to localhost (in-process, no network hop).
  * BACKEND_URL can be overridden for local development when running dashboard standalone.
  */
-const BACKEND_URL = env.BACKEND_URL ?? "http://localhost:3000";
-const ADMIN_API_KEY = env.ADMIN_API_KEY ?? "";
+const BACKEND_URL = env.BACKEND_URL ?? "";
+const BACKEND_URL_DEFAULT = "http://127.0.0.1:3000";
+
+const resolveUrl = (path: string): string =>
+  `${BACKEND_URL.length > 0 ? BACKEND_URL : BACKEND_URL_DEFAULT}${path}`;
+
+const toIsoDay = (date: Date): string => date.toISOString().slice(0, 10);
 
 export interface HealthStatus {
   ok: boolean;
@@ -26,7 +31,7 @@ export const fetchHealth = async (
 ): Promise<HealthStatus> => {
   const start = performance.now();
   try {
-    const res = await fetch(`${BACKEND_URL}/v1/healthz`, {
+    const res = await fetch(resolveUrl("/v1/healthz"), {
       signal: AbortSignal.timeout(5000),
     });
     const latencyMs = Math.round(performance.now() - start);
@@ -43,10 +48,18 @@ export const fetchHealth = async (
 
 export const fetchMetrics = async (
   fetch: typeof globalThis.fetch,
+  cookieHeader?: string | null,
 ): Promise<MetricsSummary> => {
   try {
-    const res = await fetch(`${BACKEND_URL}/v1/metrics/summary`, {
-      headers: { "x-admin-key": ADMIN_API_KEY },
+    const today = new Date();
+    const from = new Date(today.getTime() - 6 * 24 * 60 * 60 * 1000);
+    const query = new URLSearchParams({
+      from: toIsoDay(from),
+      to: toIsoDay(today),
+    });
+
+    const res = await fetch(resolveUrl(`/v1/metrics/summary?${query.toString()}`), {
+      headers: cookieHeader ? { cookie: cookieHeader } : undefined,
       signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
